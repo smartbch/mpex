@@ -213,7 +213,7 @@ mod tests {
 
         let r = block_ctx.results[0].read().unwrap();
         let s = r.deref().as_ref().unwrap()[0].as_ref().unwrap_err();
-        assert!(format!("{:?}", s).contains("task 0 warmup error: Cannot find bytecode for 0x7807a83790a6c471b7da667f716ae2d628a3012619829c7d31b5c3257bf39ecc"));
+        assert!(format!("{:?}", s).contains("Tx 0 warmup error: Cannot find bytecode for 0x7807a83790a6c471b7da667f716ae2d628a3012619829c7d31b5c3257bf39ecc"));
 
         // println!("block_ctx.results = {:?}", block_ctx.results);
         check_account_info(
