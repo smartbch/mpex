@@ -185,9 +185,13 @@ pub fn get_change_set_and_check_access_rw(
     let mut buf32 = [0u8; 32];
     let mut acc_buf = [0u8; ACC_AND_IDX_LEN];
     let mut addr_idx = [0u8; 20 + 32];
+
     for (address, account) in state {
         if !account.is_touched() {
             continue; // no change, so ignore
+        }
+        if account.is_empty() && account.is_loaded_as_not_existing() {
+            continue; // no need to write empty or new created account  TODO  account op = OP_DELETE;
         }
         let mut save_acc = false;
         if account.is_created() && !account.is_selfdestructed() {
@@ -246,11 +250,11 @@ pub fn get_change_set_and_check_access_rw(
                 op = OP_DELETE;
             }
             buf32 = idx.to_be_bytes();
+            addr_idx[20..].copy_from_slice(&buf32[..]);
+            buf32 = hasher::hash(addr_idx);
             if check_access && access_set.rnw_set.get(&buf32).is_none() {
                 return Err(anyhow!("Slot {}/{} is not in write set", address, idx));
             }
-            addr_idx[20..].copy_from_slice(&buf32[..]);
-            buf32 = hasher::hash(addr_idx);
             let v: [u8; 32] = slot.present_value.to_be_bytes();
             change_set.add_op(
                 op,

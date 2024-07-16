@@ -99,7 +99,6 @@ pub struct BlockContext<T: ADS> {
     block_env: BlockEnv,
     pub results: Vec<RwLock<Option<Vec<Result<ResultAndState>>>>>,
     gas_fee_collect: Arc<RwLock<U256>>, // TODO use AtomicUsize
-    gas_fee_receiver: Address,          // TODO directly use coinbase
 }
 
 impl<T: ADS> BlockContext<T> {
@@ -112,7 +111,6 @@ impl<T: ADS> BlockContext<T> {
             block_env: BlockEnv::default(),
             results: Vec::new(),
             gas_fee_collect: Arc::new(RwLock::new(U256::ZERO)),
-            gas_fee_receiver: Default::default(),
         }
     }
 
@@ -122,7 +120,6 @@ impl<T: ADS> BlockContext<T> {
         block_env: BlockEnv,
     ) {
         self.tasks_manager = tasks_manager;
-        self.gas_fee_receiver = block_env.coinbase.clone();
         self.block_env = block_env;
         // move curr_state to prev_state
         mem::swap(&mut self.prev_state, &mut self.curr_state);
@@ -217,14 +214,10 @@ impl<T: ADS> BlockContext<T> {
         };
 
         match evm_result {
-            Ok(mut res_and_state) => {
+            Ok(res_and_state) => {
                 tx_result.push(Ok(res_and_state.clone()));
 
-                // remove empty and not existing accounts
-                res_and_state
-                    .state
-                    .retain(|_, state| !state.is_loaded_as_not_existing() || !state.is_empty());
-
+                // TODO slots
                 let gas_used = res_and_state.result.gas_used();
                 let mut change_set = ChangeSet::new();
                 // we must check only write the rw account and slot.
@@ -313,9 +306,10 @@ impl<T: ADS> BlockContext<T> {
 
     pub fn end_block(&self) {
         let end_block_task_id = self.tasks_manager.get_last_task_id();
-        let key_hash = hasher::hash(&self.gas_fee_receiver[..]);
+        let coinbase = self.block_env.coinbase;
+        let key_hash = hasher::hash(&coinbase);
         let mut orig_acc_map = HashMap::<Address, AccAndIdx>::new();
-        let acc_info_opt = self.basic(&key_hash, &self.gas_fee_receiver, &mut orig_acc_map);
+        let acc_info_opt = self.basic(&key_hash, &coinbase, &mut orig_acc_map);
         let mut gas_fee_collected_guard = self.gas_fee_collect.write().unwrap();
         let gas_fee_collected = *gas_fee_collected_guard;
         let mut task_result: Vec<Result<ResultAndState>> = Vec::new();
@@ -333,7 +327,7 @@ impl<T: ADS> BlockContext<T> {
         };
         acc.mark_touch();
         let mut state = HashMap::new();
-        state.insert(self.gas_fee_receiver, acc);
+        state.insert(coinbase, acc);
         let state_and_result = ResultAndState {
             result: ExecutionResult::Success {
                 reason: SuccessReason::Return,
@@ -495,7 +489,6 @@ fn warmup_acc<T: ADS>(
             continue; // bytecode already in cache
         }
         let size = ads.read_code(&code_hash[..], buf);
-        println!("size: {}", size);
         if size == 0 {
             return Err(anyhow!("Cannot find bytecode for {}", code_hash));
         }
@@ -529,7 +522,12 @@ fn mpex_handle_register<DB: Database, EXT>(handler: &mut EvmHandler<'_, EXT, DB>
     handler.post_execution.reward_beneficiary =
         Arc::new(|_c, _g| -> std::result::Result<(), EVMError<DB::Error>> {
             return Ok(());
-        })
+        });
+
+    handler.validation.initial_tx_gas =
+        Arc::new(|env| -> std::result::Result<u64, EVMError<DB::Error>> {
+            return Ok(1);
+        });
 }
 
 fn get_gas_price(env: &Box<Env>) -> U256 {
