@@ -1,0 +1,9 @@
+[package]
+name = "tester"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+mpads = { path = "../mpads", features = ["check_rec"] }
+randsrc = { path = "../randsrc" }
+byteorder = "1.5.0"

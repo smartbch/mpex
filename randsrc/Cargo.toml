@@ -1,0 +1,9 @@
+[package]
+name = "randsrc"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+blake2 = "0.10.6"
+byteorder = "1.5.0"
+log = "0.4.22"
