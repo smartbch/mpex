@@ -177,6 +177,15 @@ mod tests {
         assert!(rs.result.is_success());
         assert_eq!(U256::ZERO, counter_slot.previous_or_original_value);
         assert_eq!(U256::from(3), counter_slot.present_value);
+
+        check_account_info(
+            block_ctx.curr_state.clone(),
+            &eoa_addr,
+            999999999999908266,
+            1,
+        );
+        check_account_info(block_ctx.curr_state.clone(), &ca_addr, 0, 0);
+        check_account_info(block_ctx.curr_state.clone(), &Address::ZERO, 91734, 0);
     }
 
     #[test]

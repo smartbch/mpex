@@ -1,34 +1,34 @@
 use crate::exetask::{
-    self, get_change_set_and_check_access_rw, AccAndIdx, AccessSet, ExeTask, ACC_AND_IDX_LEN,
-    READ_ACC, READ_SLOT, WRITE_ACC, WRITE_SLOT,
+    get_change_set_and_check_access_rw, AccAndIdx, AccessSet, ExeTask, ACC_AND_IDX_LEN, READ_ACC,
+    READ_SLOT, WRITE_ACC, WRITE_SLOT,
 };
 use crate::statecache::{CodeMap, StateCache};
 use crate::utils::{addr_to_u256, decode_account_info, is_empty_code_hash};
 use anyhow::{anyhow, Error, Result};
 use bincode;
-use byteorder::{BigEndian, ByteOrder};
 use mpads::changeset::ChangeSet;
 use mpads::def::{DEFAULT_ENTRY_SIZE, IN_BLOCK_IDX_MASK};
 use mpads::entry::EntryBz;
 use mpads::tasksmanager::TasksManager;
 use mpads::utils::hasher;
 use mpads::ADS;
-use revm::db::states::state;
-use revm::db::Database;
-use revm::handler::register::EvmHandler;
-use revm::interpreter::instructions::host::call;
+use revm::db::{Database, EmptyDB};
+use revm::handler::register::{EvmHandler, HandleRegisterBox};
+use revm::handler::{mainnet, register};
+use revm::interpreter::gas::ACCESS_LIST_STORAGE_KEY;
 use revm::precompile::primitives::{
     AccountInfo, BlockEnv, Bytecode, CfgEnv, Env, FixedBytes, U256,
 };
 use revm::precompile::Address;
-use revm::primitives::bitvec::index;
 use revm::primitives::{
-    keccak256, Account, Bytes, EVMError, ExecutionResult, Output, ResultAndState, SuccessReason,
-    TransactTo, TxEnv, KECCAK_EMPTY,
+    Account, Bytes, EVMError, ExecutionResult, HandlerCfg, InvalidTransaction, LatestSpec, Output,
+    ResultAndState, SpecId, SuccessReason, TransactTo, TxEnv, KECCAK_EMPTY,
 };
-use revm::Evm;
+use revm::{Evm, Handler};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::mem;
+use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 
 // to support the execution of one transaction
@@ -191,7 +191,7 @@ impl<T: ADS> BlockContext<T> {
         let coinbase_gas_price = get_gas_price(&env);
         let mut tx_result: Vec<Result<ResultAndState>> = Vec::new();
         if let Some(error) = warmup_result {
-            tx_result.push(Err(anyhow!("task {:?} warmup error: {:?}", index, error)));
+            tx_result.push(Err(anyhow!("Tx {:?} warmup error: {:?}", index, error)));
             let change_set = self.handle_tx_execute_mpex_err(&tx, coinbase_gas_price);
             return (tx_result, change_set);
         }
@@ -205,10 +205,13 @@ impl<T: ADS> BlockContext<T> {
                 access_set: &task.access_set,
                 blk_ctx: self,
             };
+
+            let count = task.get_tx_accessed_slots_count(index);
+            let handler = create_mpex_handler::<(), TxContext<'_, T>>(count);
             let mut evm = Evm::builder()
                 .with_db(tx_ctx)
                 .with_env(env)
-                .append_handler_register(mpex_handle_register)
+                .with_handler(handler)
                 .build();
             evm.transact()
         };
@@ -217,7 +220,6 @@ impl<T: ADS> BlockContext<T> {
             Ok(res_and_state) => {
                 tx_result.push(Ok(res_and_state.clone()));
 
-                // TODO slots
                 let gas_used = res_and_state.result.gas_used();
                 let mut change_set = ChangeSet::new();
                 // we must check only write the rw account and slot.
@@ -517,17 +519,27 @@ fn get_code_hash(entry_bz_data: &[u8]) -> Result<FixedBytes<32>> {
     Ok(FixedBytes::<32>::from_slice(&v[32 + 8..]))
 }
 
-fn mpex_handle_register<DB: Database, EXT>(handler: &mut EvmHandler<'_, EXT, DB>) {
-    //  Arc<dyn Fn(&mut Context<EXT, DB>, &Gas) -> EVMResultGeneric<(), <DB as Database>::Error> + 'a>;
+fn create_mpex_handler<'a, EXT, DB: Database>(
+    access_solts_count: u64,
+) -> Handler<'a, Evm<'a, (), DB>, (), DB> {
+    let mut handler = EvmHandler::<(), DB>::new(HandlerCfg::new(SpecId::LATEST));
+
     handler.post_execution.reward_beneficiary =
         Arc::new(|_c, _g| -> std::result::Result<(), EVMError<DB::Error>> {
             return Ok(());
         });
 
     handler.validation.initial_tx_gas =
-        Arc::new(|env| -> std::result::Result<u64, EVMError<DB::Error>> {
-            return Ok(1);
+        Arc::new(move |env| -> Result<u64, EVMError<<DB>::Error>> {
+            // default is LatestSpec
+            let mut initial_gas_spend = mainnet::validate_initial_tx_gas::<LatestSpec, DB>(env)?;
+            initial_gas_spend += access_solts_count * ACCESS_LIST_STORAGE_KEY;
+            if initial_gas_spend > env.tx.gas_limit {
+                return Err(InvalidTransaction::CallGasCostMoreThanGasLimit.into());
+            }
+            Ok(initial_gas_spend)
         });
+    handler
 }
 
 fn get_gas_price(env: &Box<Env>) -> U256 {

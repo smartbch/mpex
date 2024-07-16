@@ -103,6 +103,7 @@ pub struct ExeTask {
     pub change_sets: Option<Arc<Vec<ChangeSet>>>,
     bundle_start: AtomicUsize,
     min_all_done_index: AtomicUsize,
+    tx_accessed_slots_counts: Vec<u64>,
 }
 
 impl Task for ExeTask {
@@ -115,15 +116,28 @@ impl Task for ExeTask {
 impl ExeTask {
     pub fn new(tx_list: Vec<TxEnv>) -> Self {
         let mut access_set = AccessSet::new();
+        let mut tx_accessed_slots_counts = vec![];
+
         for tx in &tx_list {
             access_set.add_tx(&tx);
+            let mut count: u64 = 0;
+            for (addr, u256list) in &tx.access_list {
+                let rd_slot = *addr == READ_SLOT;
+                let wr_slot = *addr == WRITE_SLOT;
+                if rd_slot || wr_slot {
+                    count += u256list.len() as u64;
+                }
+            }
+            tx_accessed_slots_counts.push(count);
         }
+
         Self {
             tx_list,
             access_set,
             change_sets: None,
             bundle_start: AtomicUsize::new(usize::MAX),
             min_all_done_index: AtomicUsize::new(usize::MAX),
+            tx_accessed_slots_counts,
         }
     }
     pub fn set_change_sets(&mut self, change_sets: Arc<Vec<ChangeSet>>) {
@@ -172,6 +186,10 @@ impl ExeTask {
             tx.access_list = access_list;
         }
     }
+
+    pub fn get_tx_accessed_slots_count(&self, index: usize) -> u64 {
+        self.tx_accessed_slots_counts[index]
+    }
 }
 
 pub fn get_change_set_and_check_access_rw(
@@ -191,7 +209,7 @@ pub fn get_change_set_and_check_access_rw(
             continue; // no change, so ignore
         }
         if account.is_empty() && account.is_loaded_as_not_existing() {
-            continue; // no need to write empty or new created account  TODO  account op = OP_DELETE;
+            continue; // no need to write empty or new created account
         }
         let mut save_acc = false;
         if account.is_created() && !account.is_selfdestructed() {
