@@ -1,5 +1,5 @@
 use crate::statecache::StateCache;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Error, Result};
 use byteorder::{BigEndian, ByteOrder};
 use mpads::bptaskhub::Task;
 use mpads::changeset::ChangeSet;
@@ -106,6 +106,7 @@ pub struct ExeTask {
     bundle_start: AtomicUsize,
     min_all_done_index: AtomicUsize,
     tx_accessed_slots_counts: Vec<u64>,
+    pub warmup_results: Vec<Option<Error>>,
 }
 
 impl Task for ExeTask {
@@ -148,6 +149,7 @@ impl ExeTask {
             bundle_start: AtomicUsize::new(usize::MAX),
             min_all_done_index: AtomicUsize::new(usize::MAX),
             tx_accessed_slots_counts,
+            warmup_results: vec![],
         }
     }
 

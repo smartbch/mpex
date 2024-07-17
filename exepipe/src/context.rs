@@ -157,9 +157,13 @@ impl<T: ADS> BlockContext<T> {
         *gas_fee = (*gas_fee).saturating_add(gas_fee_delta.clone());
     }
 
-    pub fn execute(&self, idx: usize, warmup_results: &Vec<Option<Error>>) {
+    pub fn execute(&self, idx: usize, warmup_results: Vec<Option<Error>>) {
         let mut task_opt = self.tasks_manager.task_for_write(idx);
         let task = task_opt.as_mut().unwrap();
+        let mut warmup_res = &warmup_results;
+        if warmup_res.is_empty() {
+            warmup_res = &task.warmup_results;
+        }
         let mut change_sets = vec![];
         let mut task_result: Vec<Result<ResultAndState>> = Vec::new();
         for index in 0..task.tx_list.len() {

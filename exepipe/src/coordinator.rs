@@ -82,8 +82,7 @@ impl Coordinator {
                     let executed_sender = self.executed_sender.clone();
 
                     self.tpool.execute(move || {
-                        let mut results = blk_ctx.warmup(idx as usize);
-                        blk_ctx.execute(idx as usize, &mut results);
+                        blk_ctx.execute(idx as usize, vec![]);
                         executed_sender.send(idx).unwrap();
                     });
                     self.early_exe_map.remove(&idx);

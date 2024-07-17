@@ -55,7 +55,7 @@ mod tests {
         let block_ctx = create_transfer(from, to_address, init_balance, coinbase, true);
 
         let res = block_ctx.warmup(0);
-        block_ctx.execute(0, &res);
+        block_ctx.execute(0, res);
         block_ctx.end_block();
 
         // println!("block_ctx.results = {:?}", block_ctx.results);
@@ -84,7 +84,7 @@ mod tests {
         let block_ctx = create_transfer(from, to_address, init_balance, coinbase, true);
 
         let mut res = block_ctx.warmup(0);
-        block_ctx.execute(0, &mut res);
+        block_ctx.execute(0, res);
         block_ctx.end_block();
 
         // println!("block_ctx.results = {:?}", block_ctx.results);
@@ -113,7 +113,7 @@ mod tests {
         let block_ctx = create_transfer(from, to_address, init_balance, coinbase, true);
 
         let mut res = block_ctx.warmup(0);
-        block_ctx.execute(0, &mut res);
+        block_ctx.execute(0, res);
         block_ctx.end_block();
 
         // println!("block_ctx.results = {:?}", block_ctx.results);
@@ -136,7 +136,7 @@ mod tests {
         let block_ctx = create_transfer(from, to_address, init_balance, Address::ZERO, false);
 
         let mut res = block_ctx.warmup(0);
-        block_ctx.execute(0, &mut res);
+        block_ctx.execute(0, res);
         block_ctx.end_block();
 
         // println!("block_ctx.results = {:?}", block_ctx.results);
@@ -165,7 +165,7 @@ mod tests {
             true,
         );
         let mut res = block_ctx.warmup(0);
-        block_ctx.execute(0, &mut res);
+        block_ctx.execute(0, res);
         block_ctx.end_block();
 
         // println!("block_ctx.results = {:?}", block_ctx.results);
@@ -208,7 +208,7 @@ mod tests {
             false,
         );
         let res = block_ctx.warmup(0);
-        block_ctx.execute(0, &res);
+        block_ctx.execute(0, res);
         block_ctx.end_block();
 
         let r = block_ctx.results[0].read().unwrap();
@@ -239,7 +239,7 @@ mod tests {
 
         let block_ctx = create_contract_call(eoa_addr, ca_addr, U256::ZERO, vec![], coinbase, true);
         let mut res = block_ctx.warmup(0);
-        block_ctx.execute(0, &mut res);
+        block_ctx.execute(0, res);
         block_ctx.end_block();
 
         // println!("block_ctx.results = {:?}", block_ctx.results);
@@ -282,7 +282,7 @@ mod tests {
             true,
         );
         let mut res = block_ctx.warmup(0);
-        block_ctx.execute(0, &mut res);
+        block_ctx.execute(0, res);
         block_ctx.end_block();
         // println!("block_ctx.results = {:?}", block_ctx.results);
 

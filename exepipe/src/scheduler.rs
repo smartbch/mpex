@@ -263,7 +263,7 @@ impl Scheduler {
                 let executed_sender = self.executed_sender.clone();
                 self.tpool.execute(move || {
                     let results = ctx.warmup(task_idx);
-                    ctx.execute(task_idx, &results);
+                    ctx.execute(task_idx, results);
                     executed_sender.send(task_idx as i32).unwrap();
                 });
             } else {
@@ -292,13 +292,14 @@ fn prepare_task_and_send_eei(
     scheduled_chan: mpsc::SyncSender<EarlyExeInfo>,
     blk_ctx: Arc<BlockContext>,
 ) {
-    let task_opt = tasks_manager.task_for_read(my_idx);
-    let task = task_opt.as_ref().unwrap();
+    let mut task_opt = tasks_manager.task_for_write(my_idx);
+    let task = task_opt.as_mut().unwrap();
     let mut stop_detect = 0;
     if bundle_start - stop_detect > EARLY_EXE_WINDOW_SIZE {
         stop_detect = bundle_start - EARLY_EXE_WINDOW_SIZE;
     }
-    // blk_ctx.warmup(my_idx);
+    let results = blk_ctx.warmup(my_idx);
+    task.warmup_results = results;
     let mut min_all_done_index = {
         if stop_detect == 0 {
             0
