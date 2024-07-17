@@ -1,13 +1,13 @@
 use crate::context;
 use crate::scheduler::{EarlyExeInfo, EARLY_EXE_WINDOW_SIZE};
+use anyhow::anyhow;
 use mpads::def::{IN_BLOCK_IDX_BITS, IN_BLOCK_IDX_MASK};
+use mpads::utils::hasher;
 use mpads::SharedAdsWrap;
 use std::collections::{HashMap, HashSet};
 use std::sync::mpsc;
 use std::sync::Arc;
-use anyhow::anyhow;
 use threadpool::ThreadPool;
-use mpads::utils::hasher;
 
 type BlockContext = context::BlockContext<SharedAdsWrap>;
 
@@ -264,7 +264,7 @@ mod tests {
             tasks.push(task);
         }
         blk_ctx.start_new_block(
-            Arc::new(TasksManager::new(tasks, tasks_len as i64 - 1)),
+            Arc::new(TasksManager::new(tasks, tasks_len as i64)),
             BlockEnv::default(),
         );
         let mut coordinator = Box::new(Coordinator::new(
