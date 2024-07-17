@@ -40,15 +40,17 @@ impl AccessSet {
         }
     }
 
-    pub fn add_tx(&mut self, tx: &TxEnv) {
-        self.add_rnw_address(&tx.caller);
-        if let TransactTo::Call(to_address) = tx.transact_to {
-            if tx.value.is_zero() {
-                // to with zero-value -- readonly;
-                self.add_rdo_address(&to_address);
-            } else {
-                // to with non-zero-value -- write
-                self.add_rnw_address(&to_address);
+    pub fn add_tx(&mut self, tx: &TxEnv, for_test: bool) {
+        if !for_test {
+            self.add_rnw_address(&tx.caller);
+            if let TransactTo::Call(to_address) = tx.transact_to {
+                if tx.value.is_zero() {
+                    // to with zero-value -- readonly;
+                    self.add_rdo_address(&to_address);
+                } else {
+                    // to with non-zero-value -- write
+                    self.add_rnw_address(&to_address);
+                }
             }
         }
 
@@ -115,11 +117,19 @@ impl Task for ExeTask {
 
 impl ExeTask {
     pub fn new(tx_list: Vec<TxEnv>) -> Self {
+        Self::_new(tx_list, false)
+    }
+
+    pub fn new_for_test(tx_list: Vec<TxEnv>) -> Self {
+        Self::_new(tx_list, true)
+    }
+
+    pub fn _new(tx_list: Vec<TxEnv>, for_test: bool) -> Self {
         let mut access_set = AccessSet::new();
         let mut tx_accessed_slots_counts = vec![];
 
         for tx in &tx_list {
-            access_set.add_tx(&tx);
+            access_set.add_tx(&tx, for_test);
             let mut count: u64 = 0;
             for (addr, u256list) in &tx.access_list {
                 let rd_slot = *addr == READ_SLOT;
@@ -140,6 +150,7 @@ impl ExeTask {
             tx_accessed_slots_counts,
         }
     }
+
     pub fn set_change_sets(&mut self, change_sets: Arc<Vec<ChangeSet>>) {
         self.change_sets = Some(change_sets);
     }
@@ -304,7 +315,7 @@ pub mod test_exe_task {
         tx.value = U256::from(100);
         build_access_list(&mut access_list);
         tx.access_list = access_list;
-        set.add_tx(&tx);
+        set.add_tx(&tx, false);
         assert_eq!(set.rdo_set.len(), 2);
         let byte32: [u8; 32] = U256::from(1).to_be_bytes();
         let read_address_hash = hasher::hash(&byte32[12..]);

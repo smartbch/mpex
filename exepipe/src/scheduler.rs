@@ -354,12 +354,15 @@ fn task_conflicts(a: &ExeTask, b: &ExeTask) -> bool {
 mod tests {
     use serial_test::serial;
     use std::{
+        ops::Add,
         sync::{Mutex, RwLock},
         thread,
     };
 
     use mpads::test_helper::TempDir;
-    use revm::primitives::{Address, BlockEnv, TxEnv, U256};
+    use revm::primitives::{
+        address, alloy_primitives::U160, hex::FromHex, Address, BlockEnv, TransactTo, TxEnv, U256,
+    };
 
     use crate::{
         exetask::{READ_ACC, WRITE_ACC},
@@ -491,7 +494,8 @@ mod tests {
 
         {
             let mut tx = TxEnv::default();
-            tx.access_list = vec![(WRITE_ACC, vec![U256::ZERO])];
+            tx.caller = Address::from_slice(&U160::from(0).as_le_slice());
+            tx.transact_to = TransactTo::create();
             let tx_list: Vec<TxEnv> = vec![tx];
             let task = ExeTask::new(tx_list);
             scheduler.add_task(task);
@@ -500,7 +504,8 @@ mod tests {
 
         {
             let mut tx = TxEnv::default();
-            tx.access_list = vec![(WRITE_ACC, vec![U256::from(1)])];
+            tx.caller = Address::from_slice(&U160::from(1).as_le_slice());
+            tx.transact_to = TransactTo::create();
             let tx_list: Vec<TxEnv> = vec![tx];
             let task = ExeTask::new(tx_list);
             scheduler.add_task(task);
@@ -521,7 +526,8 @@ mod tests {
 
         {
             let mut tx = TxEnv::default();
-            tx.access_list = vec![(WRITE_ACC, vec![U256::ZERO])];
+            tx.caller = Address::from_slice(&U160::from(0).as_le_slice());
+            tx.transact_to = TransactTo::create();
             let tx_list: Vec<TxEnv> = vec![tx];
             let task = ExeTask::new(tx_list);
             scheduler.add_task(task);
@@ -531,7 +537,8 @@ mod tests {
 
         {
             let mut tx = TxEnv::default();
-            tx.access_list = vec![(WRITE_ACC, vec![U256::ZERO])];
+            tx.caller = Address::from_slice(&U160::from(0).as_le_slice());
+            tx.transact_to = TransactTo::create();
             let tx_list: Vec<TxEnv> = vec![tx];
             let task = ExeTask::new(tx_list);
             scheduler.add_task(task);
@@ -562,7 +569,7 @@ mod tests {
             let mut tx = TxEnv::default();
             tx.access_list = vec![(WRITE_ACC, vec![U256::ZERO])];
             let tx_list: Vec<TxEnv> = vec![tx];
-            let task = ExeTask::new(tx_list);
+            let task = ExeTask::new_for_test(tx_list);
             scheduler.add_task(task);
         }
 
@@ -571,7 +578,7 @@ mod tests {
         let mut tx = TxEnv::default();
         tx.access_list = vec![(WRITE_ACC, vec![U256::ZERO])];
         let tx_list: Vec<TxEnv> = vec![tx];
-        let task = ExeTask::new(tx_list);
+        let task = ExeTask::new_for_test(tx_list);
         scheduler.add_task(task);
         // no large enough bundle to flush, so task fails
         assert_eq!(scheduler.fail_vec.len(), 1);
@@ -580,7 +587,7 @@ mod tests {
             let mut tx = TxEnv::default();
             tx.access_list = vec![(WRITE_ACC, vec![U256::from(i)])];
             let tx_list: Vec<TxEnv> = vec![tx];
-            let task = ExeTask::new(tx_list);
+            let task = ExeTask::new_for_test(tx_list);
             scheduler.add_task(task);
         }
         assert_eq!(scheduler.pb.get_rdo_set_size(0), 0);
@@ -590,7 +597,7 @@ mod tests {
         let mut tx = TxEnv::default();
         tx.access_list = vec![(WRITE_ACC, vec![U256::ZERO])];
         let tx_list: Vec<TxEnv> = vec![tx];
-        let task = ExeTask::new(tx_list);
+        let task = ExeTask::new_for_test(tx_list);
         // flush a large enough bundle
         scheduler.add_task(task);
         thread::sleep(std::time::Duration::from_secs(1));
@@ -606,7 +613,7 @@ mod tests {
             let mut tx = TxEnv::default();
             tx.access_list = vec![(READ_ACC, vec![U256::from(i)])];
             let tx_list: Vec<TxEnv> = vec![tx];
-            let task = ExeTask::new(tx_list);
+            let task = ExeTask::new_for_test(tx_list);
             scheduler.add_task(task);
         }
         thread::sleep(std::time::Duration::from_secs(1));
@@ -657,7 +664,8 @@ mod tests {
         scheduler.start_new_block(1, blk_ctx);
 
         let mut tx = TxEnv::default();
-        tx.access_list = vec![(WRITE_ACC, vec![U256::ZERO])];
+        tx.caller = Address::from_slice(&U160::from(0).as_le_slice());
+        tx.transact_to = TransactTo::create();
         let tx_list: Vec<TxEnv> = vec![tx];
         let task = ExeTask::new(tx_list);
         scheduler.add_task(task);
