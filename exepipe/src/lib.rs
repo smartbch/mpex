@@ -2,6 +2,7 @@ extern crate core;
 
 pub mod context;
 pub mod coordinator;
+pub mod escchainbench;
 pub mod exetask;
 pub mod scheduler;
 pub mod statecache;
@@ -13,7 +14,7 @@ use crate::coordinator::Coordinator;
 use crate::exetask::ExeTask;
 use crate::scheduler::Scheduler;
 use mpads::tasksmanager::TasksManager;
-use mpads::{ADS, AdsWrap};
+use mpads::{AdsWrap, ADS};
 use revm::precompile::primitives::BlockEnv;
 use std::sync::mpsc;
 use std::sync::{Arc, RwLock};
