@@ -128,19 +128,21 @@ impl<T: ADS> BlockContext<T> {
         self.results = (0..self.tasks_manager.tasks_len())
             .map(|_| RwLock::new(Option::None))
             .collect();
-
-        // warmup coinbase account only once
-        let mut buf = Vec::with_capacity(8192);
-        buf.resize(DEFAULT_ENTRY_SIZE, 0);
-        let _ = warmup_acc(
-            &self.ads,
-            &vec![addr_to_u256(&self.block_env.coinbase)],
-            &self.curr_state.bytecode_map,
-            &mut buf,
-        );
     }
 
     pub fn warmup(&self, idx: usize) -> Vec<Option<Error>> {
+        if idx == 0 {
+            // warmup coinbase account when the first task
+            let mut buf = Vec::with_capacity(8192);
+            buf.resize(DEFAULT_ENTRY_SIZE, 0);
+            let _ = warmup_acc(
+                &self.ads,
+                &vec![addr_to_u256(&self.block_env.coinbase)],
+                &self.curr_state.bytecode_map,
+                &mut buf,
+            );
+        }
+
         let mut task_opt = self.tasks_manager.task_for_write(idx);
         let task = task_opt.as_mut().unwrap();
         let tx_nums = task.tx_list.len();
@@ -447,7 +449,7 @@ fn warmup_tx<T: ADS>(tx: &TxEnv, ads: &T, bytecode_map: &Arc<CodeMap>) -> Result
     )?;
     if found == 0 {
         // caller must exist
-        return Err(anyhow!("Cannot find caller account"));
+        return Err(anyhow!("Cannot find caller account {}", tx.caller));
     }
     if let TransactTo::Call(to_address) = tx.transact_to {
         warmup_acc(
