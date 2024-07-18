@@ -14,7 +14,7 @@ use mpads::{AdsCore, SharedAdsWrap, ADS};
 use revm::primitives::{AccountInfo, Address, Bytecode, B256, U256};
 use threadpool::ThreadPool;
 
-use crate::exetask::ACC_AND_IDX_LEN;
+use crate::exetask::ACC_INFO_LEN;
 use crate::scheduler::EarlyExeInfo;
 
 pub fn generate_ads_wrap(
@@ -149,7 +149,7 @@ impl ADS for MockADS {
 }
 
 pub fn encode_account_info(account_info: &AccountInfo) -> Vec<u8> {
-    let mut buf = vec![0u8; ACC_AND_IDX_LEN];
+    let mut buf = vec![0u8; ACC_INFO_LEN];
     buf[0..32].copy_from_slice(&account_info.balance.to_be_bytes_vec()); // balance
     BigEndian::write_u64(&mut buf[32..32 + 8], account_info.nonce); // nonce
     buf[40..72].copy_from_slice(account_info.code_hash.as_ref()); // code_hash

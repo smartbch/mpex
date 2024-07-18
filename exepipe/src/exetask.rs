@@ -18,9 +18,9 @@ pub const READ_SLOT: Address = address!("000000000000000000000000000000000000000
 pub const WRITE_SLOT: Address = address!("0000000000000000000000000000000000000004");
 
 //  | 32byte code hash
-pub const ACC_AND_IDX_LEN: usize = 32 + 8 + 32;
+pub const ACC_INFO_LEN: usize = 32 + 8 + 32;
 
-pub type AccAndIdx = [u8; ACC_AND_IDX_LEN];
+pub type AccInfo = [u8; ACC_INFO_LEN];
 
 #[derive(Debug)]
 pub struct AccessSet {
@@ -62,16 +62,12 @@ impl AccessSet {
             for u256 in u256list {
                 let bytes32: [u8; 32] = u256.to_be_bytes();
                 if rd_acc {
-                    // push address hash in set.
-                    let key_hash = hasher::hash(&bytes32[12..]);
-                    self.rdo_set.insert(key_hash);
-                    self.rdo_k64_vec.push(BigEndian::read_u64(&key_hash[..8]));
+                    let address = Address::from_slice(&bytes32[12..]);
+                    self.add_rdo_address(&address);
                 }
                 if wr_acc {
-                    // push address hash in set.
-                    let key_hash = hasher::hash(&bytes32[12..]);
-                    self.rnw_set.insert(key_hash);
-                    self.rnw_k64_vec.push(BigEndian::read_u64(&key_hash[..8]));
+                    let address = Address::from_slice(&bytes32[12..]);
+                    self.add_rnw_address(&address);
                 }
                 if rd_slot {
                     self.rdo_set.insert(bytes32);
@@ -111,7 +107,8 @@ pub struct ExeTask {
 
 impl Task for ExeTask {
     fn get_change_sets(&self) -> Arc<Vec<ChangeSet>> {
-        let change_set = self.change_sets.as_ref().unwrap();
+        let change_set: &Arc<Vec<ChangeSet>> =
+            self.change_sets.as_ref().unwrap();
         change_set.clone()
     }
 }
@@ -127,7 +124,7 @@ impl ExeTask {
 
     pub fn _new(tx_list: Vec<TxEnv>, for_test: bool) -> Self {
         let mut access_set = AccessSet::new();
-        let mut tx_accessed_slots_counts = vec![];
+        let mut tx_accessed_slots_counts = Vec::with_capacity(tx_list.len());
 
         for tx in &tx_list {
             access_set.add_tx(&tx, for_test);
@@ -182,6 +179,7 @@ impl ExeTask {
         self.min_all_done_index.load(Ordering::SeqCst)
     }
 
+    // rewrite the accounts in accesslist to let revm collect their fees
     pub fn rewrite_txs_access_list(&mut self) {
         for tx in self.tx_list.iter_mut() {
             let mut access_list = vec![];
@@ -208,13 +206,13 @@ impl ExeTask {
 pub fn get_change_set_and_check_access_rw(
     change_set: &mut ChangeSet,
     state: &HashMap<Address, Account>,
-    orig_acc_map: &HashMap<Address, AccAndIdx>,
+    orig_acc_map: &HashMap<Address, AccInfo>,
     state_cache: &StateCache,
     access_set: &AccessSet, //cannot write read-only members
     check_access: bool,     // end_block logic not need check_access
 ) -> Result<()> {
     let mut buf32 = [0u8; 32];
-    let mut acc_buf = [0u8; ACC_AND_IDX_LEN];
+    let mut acc_buf = [0u8; ACC_INFO_LEN];
     let mut addr_idx = [0u8; 20 + 32];
 
     for (address, account) in state {
@@ -375,7 +373,7 @@ pub mod test_exe_task {
         from_acc.storage.insert(slot_d_idx, slot_d);
         state.insert(from_address.clone(), from_acc.clone());
 
-        let orig_acc_map = HashMap::<Address, AccAndIdx>::new();
+        let orig_acc_map = HashMap::<Address, AccInfo>::new();
         let state_cache = StateCache::new();
         let mut access_set = AccessSet::new();
         let buf32 = hasher::hash(from_address);

@@ -15,7 +15,7 @@ pub const BLOOM_BITS: u64 = 1 << BLOOM_BITS_SHIFT; //bit count in one bloomfilte
 pub const BLOOM_BITS_MASK: u64 = BLOOM_BITS - 1;
 pub const SET_MAX_SIZE: usize = BLOOM_BITS as usize / 8;
 pub const MAX_TX_IN_BUNDLE: usize = 64;
-pub const MIN_TX_IN_BUNDLE: usize = 16;
+pub const MIN_TX_IN_BUNDLE: usize = 8;
 pub const BUNDLE_COUNT: usize = 64;
 pub const EARLY_EXE_WINDOW_SIZE: usize = 128;
 
@@ -171,7 +171,7 @@ impl Scheduler {
     }
 
     pub fn first_large_enough_bundle(&self) -> usize {
-        for i in 0..self.bundles.len() {
+        for i in 0..BUNDLE_COUNT {
             if self.bundles[i].len() > MIN_TX_IN_BUNDLE {
                 return i;
             }
@@ -199,12 +199,12 @@ impl Scheduler {
             mask |= self.pb.get_rnw_mask(k64);
         }
         let mut bundle_id = mask.trailing_ones() as usize;
-        // max bundle_id is 64
+        // if we cannot find a bundle to insert task because
+        // it conflicts with all the bundles
         if bundle_id == BUNDLE_COUNT {
-            // task conflicts with all the bundls
             bundle_id = self.first_large_enough_bundle();
             if bundle_id < BUNDLE_COUNT {
-                // flush a large enough bundle
+                // if we find a large enough bundle, flush it
                 self.pb.clear(bundle_id);
                 self.flush_bundle(bundle_id);
             } else {
@@ -249,7 +249,7 @@ impl Scheduler {
         let target = self.bundles.get_mut(bundle_id).unwrap();
         let bundle_start = self.out_idx;
         while target.len() != 0 {
-            {
+            { // move task from the target bundle to tasks_manager
                 let task = target.pop_front().unwrap();
                 task.set_bundle_start(bundle_start);
                 // append task to out_vec
@@ -267,12 +267,10 @@ impl Scheduler {
                     executed_sender.send(task_idx as i32).unwrap();
                 });
             } else {
-                let tasks_manager = self.blk_ctx.tasks_manager.clone();
                 let scheduled_chan = self.scheduled_chan.clone();
                 // after prepare_task, the task will be issued by Coordinator
                 self.tpool.execute(move || {
                     prepare_task_and_send_eei(
-                        tasks_manager,
                         task_idx,
                         bundle_start,
                         scheduled_chan,
@@ -286,16 +284,15 @@ impl Scheduler {
 }
 
 fn prepare_task_and_send_eei(
-    tasks_manager: Arc<TasksManager<ExeTask>>,
     my_idx: usize,
     bundle_start: usize,
     scheduled_chan: mpsc::SyncSender<EarlyExeInfo>,
     blk_ctx: Arc<BlockContext>,
 ) {
-    let mut task_opt = tasks_manager.task_for_write(my_idx);
+    let mut task_opt = blk_ctx.tasks_manager.task_for_write(my_idx);
     let task = task_opt.as_mut().unwrap();
     let mut stop_detect = 0;
-    if bundle_start - stop_detect > EARLY_EXE_WINDOW_SIZE {
+    if bundle_start > EARLY_EXE_WINDOW_SIZE {
         stop_detect = bundle_start - EARLY_EXE_WINDOW_SIZE;
     }
     let results = blk_ctx.warmup(my_idx);
@@ -309,7 +306,7 @@ fn prepare_task_and_send_eei(
     };
     // find the smallest early_idx
     for early_idx in (stop_detect..bundle_start).rev() {
-        let other_opt = tasks_manager.task_for_read(early_idx);
+        let other_opt = blk_ctx.tasks_manager.task_for_read(early_idx);
         let other = other_opt.as_ref().unwrap();
         // stop loop when we find a conflicting peer
         if task_conflicts(&task, other) {

@@ -87,8 +87,6 @@ impl Coordinator {
                     });
                     self.early_exe_map.remove(&idx);
                 }
-            } else {
-                break;
             }
         }
     }

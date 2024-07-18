@@ -6,7 +6,7 @@ use std::{
 
 use exepipe::{
     context::BlockContext,
-    exetask::{ExeTask, ACC_AND_IDX_LEN},
+    exetask::{ExeTask, ACC_INFO_LEN},
     statecache::StateCache,
     test_helper::{addr_idx_hash, calc_code_hash, MockADS},
     utils::decode_account_info,
@@ -30,7 +30,7 @@ mod tests {
 
     use exepipe::{
         context::BlockContext,
-        exetask::{ExeTask, ACC_AND_IDX_LEN, READ_SLOT, WRITE_SLOT},
+        exetask::{ExeTask, ACC_INFO_LEN, READ_SLOT, WRITE_SLOT},
         test_helper::{addr_idx_hash, calc_code_hash, MockADS},
         utils::decode_account_info,
     };
@@ -306,7 +306,7 @@ mod tests {
 }
 
 fn check_account_info(state: Arc<StateCache>, eoa_addr: &Address, balance: u128, nonce: u64) {
-    let mut buf = [0u8; ACC_AND_IDX_LEN];
+    let mut buf = [0u8; ACC_INFO_LEN];
     state.lookup_data(&hasher::hash(eoa_addr.to_vec().as_slice()), &mut buf);
     let acc = decode_account_info(&buf);
     assert_eq!(acc.balance, U256::from(balance));

@@ -1,5 +1,5 @@
 use crate::exetask::{
-    get_change_set_and_check_access_rw, AccAndIdx, AccessSet, ExeTask, ACC_AND_IDX_LEN, READ_ACC,
+    get_change_set_and_check_access_rw, AccInfo, AccessSet, ExeTask, ACC_INFO_LEN, READ_ACC,
     READ_SLOT, WRITE_ACC, WRITE_SLOT,
 };
 use crate::statecache::{CodeMap, StateCache};
@@ -35,13 +35,13 @@ use std::sync::{Arc, RwLock};
 struct TxContext<'a, T: ADS> {
     // cache the original status of the accounts touched by this tx
     // judge whether the account is written
-    orig_acc_map: &'a mut HashMap<Address, AccAndIdx>,
+    orig_acc_map: &'a mut HashMap<Address, AccInfo>,
     access_set: &'a AccessSet,
     blk_ctx: &'a BlockContext<T>,
 }
 
 // Evm use TxContext as a Database
-// It uses blk_ctx as datasource, while using access_set as constrain
+// It uses blk_ctx as datasource, and uses access_set as constrain
 impl<'a, T: ADS> Database for TxContext<'a, T> {
     type Error = anyhow::Error;
 
@@ -88,8 +88,9 @@ impl<'a, T: ADS> Database for TxContext<'a, T> {
 
 // Support all the transactions in a block
 pub struct BlockContext<T: ADS> {
-    // a large enough vec to contain all the tasks
-    // the last task's id in this block: not always equal to task_list.len()-1
+    // TasksManage has a large enough vec to contain all the tasks
+    // The last task's id in this block: not always equal to task_list.len()-1 because
+    // scheduler may mark failed tasks
     pub tasks_manager: Arc<TasksManager<ExeTask>>,
     // StateCache for current block
     pub curr_state: Arc<StateCache>,
@@ -164,7 +165,7 @@ impl<T: ADS> BlockContext<T> {
         if warmup_res.is_empty() {
             warmup_res = &task.warmup_results;
         }
-        let mut change_sets = vec![];
+        let mut change_sets = Vec::with_capacity(task.tx_list.len());
         let mut task_result: Vec<Result<ResultAndState>> = Vec::new();
         for index in 0..task.tx_list.len() {
             let (tx_result, mut change_set) =
@@ -226,13 +227,13 @@ impl<T: ADS> BlockContext<T> {
 
                 let gas_used = res_and_state.result.gas_used();
                 let mut change_set = ChangeSet::new();
-                // we must check only write the rw account and slot.
+                // we must check not writing the readonly account and slot.
                 match get_change_set_and_check_access_rw(
                     &mut change_set,
                     &res_and_state.state,
                     &mut orig_acc_map,
                     self.curr_state.as_ref(),
-                    &task.access_set, //to check out-of-set-write errors
+                    &task.access_set, //to check out-of-write-set errors
                     true,
                 ) {
                     Ok(_) => {
@@ -251,7 +252,7 @@ impl<T: ADS> BlockContext<T> {
             }
         }
 
-        // must has error, cannot apply state change, but we need deduct all gas from caller.
+        // at errors, cannot apply state change, but we need deduct all gas from caller.
         let change_set = self.handle_tx_execute_mpex_err(&tx, coinbase_gas_price);
         return (tx_result, change_set);
     }
@@ -284,7 +285,7 @@ impl<T: ADS> BlockContext<T> {
 
     fn deduct_and_collect_caller_gas_fee(
         &self,
-        orig_data: &[u8; ACC_AND_IDX_LEN],
+        orig_data: &[u8; ACC_INFO_LEN],
         gas_fee: U256,
     ) -> Account {
         let mut caller_acc = decode_account_info(orig_data);
@@ -314,7 +315,7 @@ impl<T: ADS> BlockContext<T> {
         let end_block_task_id = self.tasks_manager.get_last_task_id();
         let coinbase = self.block_env.coinbase;
         let key_hash = hasher::hash(&coinbase);
-        let mut orig_acc_map = HashMap::<Address, AccAndIdx>::new();
+        let mut orig_acc_map = HashMap::<Address, AccInfo>::new();
         let acc_info_opt = self.basic(&key_hash, &coinbase, &mut orig_acc_map);
         let mut gas_fee_collected_guard = self.gas_fee_collect.write().unwrap();
         let gas_fee_collected = *gas_fee_collected_guard;
@@ -374,9 +375,9 @@ impl<T: ADS> BlockContext<T> {
         &self,
         key_hash: &[u8; 32],
         address: &Address,
-        orig_acc_map: &mut HashMap<Address, AccAndIdx>,
+        orig_acc_map: &mut HashMap<Address, AccInfo>,
     ) -> Option<AccountInfo> {
-        let mut buf = [0u8; ACC_AND_IDX_LEN];
+        let mut buf = [0u8; ACC_INFO_LEN];
         let mut cache_hit = self.curr_state.lookup_data(key_hash, &mut buf[..]);
         if !cache_hit {
             cache_hit = self.prev_state.lookup_data(key_hash, &mut buf[..]);
@@ -390,7 +391,7 @@ impl<T: ADS> BlockContext<T> {
                 return None;
             }
             let entry_bz = EntryBz { bz: &ebuf[..size] };
-            buf[..ACC_AND_IDX_LEN].copy_from_slice(entry_bz.value());
+            buf[..ACC_INFO_LEN].copy_from_slice(entry_bz.value());
         }
         orig_acc_map.insert(*address, buf);
         return Some(decode_account_info(&buf));
@@ -517,7 +518,7 @@ fn get_code_hash(entry_bz_data: &[u8]) -> Result<FixedBytes<32>> {
         panic!("Invalid length for Address");
     }
     let v = entry_bz.value();
-    if v.len() != ACC_AND_IDX_LEN {
+    if v.len() != ACC_INFO_LEN {
         panic!("Invalid length for AccInfo");
     }
     Ok(FixedBytes::<32>::from_slice(&v[32 + 8..]))
@@ -694,7 +695,7 @@ mod tests {
         let mut acc_set = AccessSet::new();
         acc_set.rdo_set.insert(kh1);
         acc_set.rnw_set.insert(kh2);
-        let mut orig_acc_map: HashMap<Address, AccAndIdx> = HashMap::new();
+        let mut orig_acc_map: HashMap<Address, AccInfo> = HashMap::new();
         let mut tx_ctx = TxContext::<MockADS> {
             orig_acc_map: &mut orig_acc_map,
             access_set: &acc_set,
@@ -744,7 +745,7 @@ mod tests {
         assert_eq!(Option::Some(c3.clone()), block_ctx.code_by_hash(&h3));
 
         // test TxContext
-        let mut orig_acc_map: HashMap<Address, AccAndIdx> = HashMap::new();
+        let mut orig_acc_map: HashMap<Address, AccInfo> = HashMap::new();
         let mut tx_ctx = TxContext::<MockADS> {
             orig_acc_map: &mut orig_acc_map,
             access_set: &AccessSet::new(),
@@ -777,7 +778,7 @@ mod tests {
         block_ctx.curr_state.insert_data(&kh1, data[1].as_bytes());
         block_ctx.prev_state.insert_data(&kh2, data[2].as_bytes());
 
-        let mut orig_acc_map: HashMap<Address, AccAndIdx> = HashMap::new();
+        let mut orig_acc_map: HashMap<Address, AccInfo> = HashMap::new();
         let result1 = block_ctx.basic(&kh1, &a1, &mut orig_acc_map);
         let result2 = block_ctx.basic(&kh2, &a2, &mut orig_acc_map);
         let result3 = block_ctx.basic(&kh3, &a3, &mut orig_acc_map);
@@ -790,7 +791,7 @@ mod tests {
         let mut acc_set = AccessSet::new();
         acc_set.rdo_set.insert(kh1);
         acc_set.rnw_set.insert(kh2);
-        let mut orig_acc_map: HashMap<Address, AccAndIdx> = HashMap::new();
+        let mut orig_acc_map: HashMap<Address, AccInfo> = HashMap::new();
         let mut tx_ctx = TxContext::<MockADS> {
             orig_acc_map: &mut orig_acc_map,
             access_set: &acc_set,
