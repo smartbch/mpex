@@ -1,9 +1,10 @@
 use byteorder::{ByteOrder, LittleEndian};
 use mpads::changeset::ChangeSet;
 use mpads::def::{
-    COMPACT_THRES, CODE_SHARD_ID, IN_BLOCK_IDX_BITS, OP_DELETE, OP_WRITE, SHARD_COUNT,
-    UTILIZATION_DIV, UTILIZATION_RATIO,
+    COMPACT_THRES, CODE_SHARD_ID, DEFAULT_FILE_SIZE, IN_BLOCK_IDX_BITS, OP_DELETE, OP_WRITE,
+    SHARD_COUNT, UTILIZATION_DIV, UTILIZATION_RATIO, SENTRY_COUNT,
 };
+use mpads::entry::EntryBz;
 use mpads::refdb::{byte0_to_shard_id, OpRecord, RefDB};
 use mpads::tasksmanager::TasksManager;
 use mpads::test_helper::SimpleTask;
@@ -41,6 +42,19 @@ fn main() {
             let task_id = (height << IN_BLOCK_IDX_BITS) | idx;
             println!("AA Fuzz height={} task_id={:#08x}", height, task_id);
             shared_ads.add_task(task_id);
+        }
+        let read_count = test_gen.get_read_count();
+        let mut buf = [0u8; DEFAULT_ENTRY_SIZE];
+        for _ in 0..read_count {
+            let (k, kh, v) = test_gen.rand_read_kv(height);
+            let (size, ok) = shared_ads.read_entry(&kh[..], &k[..], &mut buf);
+            if !ok {
+                panic!("Cannot read entry");
+            }
+            let entry = EntryBz{ bz: &buf[..size] };
+            if entry.value() != &v[..] {
+                panic!("Value mismatch");
+            }
         }
     }
 }
@@ -91,14 +105,15 @@ impl TestGenV1 {
         refdb.utilization_div = UTILIZATION_DIV;
         refdb.utilization_ratio = UTILIZATION_RATIO;
         refdb.compact_thres = COMPACT_THRES;
+        let total_sentry = SENTRY_COUNT * SHARD_COUNT;
         Self {
             change_set_size_min: 5,
             change_set_size_max: 50,
             block_size_min: 10,
             block_size_max: 500,
-            key_count_max: 1 << 16,
-            active_num_to_start_remove: 1 << 15,
-            active_num_to_start_read: 1 << 15,
+            key_count_max: 3 << 16,
+            active_num_to_start_remove: total_sentry + (3 << 14),
+            active_num_to_start_read: total_sentry + (3 << 14),
             remove_prob: 20, // 20%
             code_prob: 5, //5%
             max_code_len: 1024,
@@ -141,15 +156,14 @@ impl TestGenV1 {
         }
         pre_cset.sort();
         let mut cset = ChangeSet::new();
+        // drive refdb using pre_cset
         pre_cset.apply_op_in_range(|op_type, _kh, k, v, _rec| {
             let shard_id = _kh[0] >> 4;
             if op_type == OP_WRITE {
                 let rec = self.refdb.set_entry(k, v);
                 cset.add_op_rec(rec);
             } else {
-                let rec = self.refdb.remove_entry(k);
-                if rec.is_some() {
-                    let rec = rec.unwrap();
+                if let Some(rec) = self.refdb.remove_entry(k) {
                     cset.add_op_rec(rec);
                 }
             }
@@ -160,16 +174,9 @@ impl TestGenV1 {
             self.refdb.set_code(&code_hash, v);
             cset.add_op(op_type, CODE_SHARD_ID as u8, kh, k, v, None);
         });
-        cset.sort(); // this will not change its order
+        // cset will not get its order changed because pre_cset was already sorted
+        cset.sort();
         cset
-    }
-
-    pub fn get_read_count(&mut self) -> usize {
-        let active_num = self.refdb.total_num_active();
-        if active_num < self.active_num_to_start_read {
-            return 0;
-        }
-        rand_between(&mut self.randsrc, 0, self.max_read_count)
     }
 
     pub fn gen_op(&mut self, cset: &mut ChangeSet, keys: &mut HashSet<usize>) {
@@ -199,5 +206,33 @@ impl TestGenV1 {
             op = OP_DELETE;
         }
         cset.add_op(op, kh[0] >> 4, &kh, &k[..], &v[..], None);
+    }
+
+    pub fn get_read_count(&mut self) -> usize {
+        let active_num = self.refdb.total_num_active();
+        if active_num < self.active_num_to_start_read {
+            return 0;
+        }
+        rand_between(&mut self.randsrc, 0, self.max_read_count)
+    }
+
+    //fn read_entry(&self, key_hash: &[u8], key: &[u8], buf: &mut [u8]) -> (usize, bool) 
+    pub fn rand_read_kv(&mut self, curr_height: i64) -> ([u8; 32], [u8; 32], Vec<u8>) {
+        loop {
+            let mut k_num = rand_between(&mut self.randsrc, 0, self.key_count_max);
+            let k = hash(k_num);
+            let kh = hasher::hash(&k[..]);
+            let v_opt = self.refdb.get_entry(&k);
+            if v_opt.is_none() {
+                continue; //retry till hit
+            }
+            let v = v_opt.unwrap();
+            let e = EntryBz{ bz: &v[..] };
+            let create_height = e.version() >> IN_BLOCK_IDX_BITS;
+            if create_height + 2 > curr_height {
+                continue; //retry to avoid recent
+            }
+            return (k, kh, v);
+        }
     }
 }
