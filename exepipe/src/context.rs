@@ -259,6 +259,10 @@ impl<T: ADS> BlockContext<T> {
         return (tx_result, change_set);
     }
 
+    // handle_tx_execute_mpex_err will be call at errors because:
+    // 1. warmup generates errors
+    // 2. revm.transact gets errors from 'Database' or handlers and returns them 
+    // 2. get_change_set_and_check_access_rw returns error of writing readonly data
     fn handle_tx_execute_mpex_err(&self, tx: &TxEnv, coinbase_gas_price: U256) -> ChangeSet {
         let mut orig_acc_map: HashMap<Address, [u8; 72]> = HashMap::new();
         // make sure the caller account is in orig_acc_map
@@ -271,6 +275,7 @@ impl<T: ADS> BlockContext<T> {
             let acc = self.deduct_and_collect_caller_gas_fee(&orig_data.unwrap().clone(), gas_fee);
             let mut state = HashMap::new();
             state.insert(tx.caller, acc);
+            // it's safe to unwrap the result because the only state change is on tx.caller
             get_change_set_and_check_access_rw(
                 &mut change_set,
                 &state,
@@ -394,6 +399,8 @@ impl<T: ADS> BlockContext<T> {
             let entry_bz = EntryBz { bz: &ebuf[..size] };
             buf[..ACC_INFO_LEN].copy_from_slice(entry_bz.value());
         }
+        //even if the same address is used to call 'basic' multiple times, the same
+        //result will be inserted into orig_acc_map
         orig_acc_map.insert(*address, buf);
         return Some(decode_account_info(&buf));
     }
