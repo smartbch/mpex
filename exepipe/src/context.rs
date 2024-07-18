@@ -169,7 +169,7 @@ impl<T: ADS> BlockContext<T> {
         let mut task_result: Vec<Result<ResultAndState>> = Vec::new();
         for index in 0..task.tx_list.len() {
             let (tx_result, mut change_set) =
-                self.handle_transaction(&task, index, &warmup_results[index]);
+                self.handle_transaction(&task, index, &warmup_res[index]);
             task_result.extend(tx_result);
             change_set.sort();
             self.curr_state.apply_change(&change_set);
