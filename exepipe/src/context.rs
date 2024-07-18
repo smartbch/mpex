@@ -264,7 +264,6 @@ impl<T: ADS> BlockContext<T> {
         // make sure the caller account is in orig_acc_map
         let key_hash = hasher::hash(&tx.caller[..]);
         self.basic(&key_hash, &tx.caller, &mut orig_acc_map);
-        // todo: orig_acc may not contain caller, we should load from db and insert the caller into orig_acc.
         let orig_data = orig_acc_map.get(&tx.caller);
         let mut change_set = ChangeSet::new();
         if !orig_data.is_none() {
