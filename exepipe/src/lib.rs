@@ -2,7 +2,7 @@ extern crate core;
 
 pub mod context;
 pub mod coordinator;
-pub mod escchainbench;
+pub mod bench;
 pub mod exetask;
 pub mod scheduler;
 pub mod statecache;
