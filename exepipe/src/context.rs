@@ -439,12 +439,16 @@ fn warmup_tx<T: ADS>(tx: &TxEnv, ads: &T, bytecode_map: &Arc<CodeMap>) -> Result
     buf.resize(DEFAULT_ENTRY_SIZE, 0);
 
     // warmup caller and to_address
-    warmup_acc(
+    let found = warmup_acc(
         ads,
         &vec![addr_to_u256(&tx.caller)],
         &bytecode_map,
         &mut buf,
     )?;
+    if found == 0 {
+        // caller must exist
+        return Err(anyhow!("Cannot find caller account"));
+    }
     if let TransactTo::Call(to_address) = tx.transact_to {
         warmup_acc(
             ads,
@@ -478,7 +482,8 @@ fn warmup_acc<T: ADS>(
     u256list: &Vec<U256>,
     bytecode_map: &Arc<CodeMap>,
     buf: &mut Vec<u8>,
-) -> Result<()> {
+) -> Result<u64> {
+    let mut found = 0;
     for u256 in u256list {
         let bytes32: [u8; 32] = u256.to_be_bytes();
         let key = Address::from_slice(&bytes32[12..]);
@@ -488,6 +493,7 @@ fn warmup_acc<T: ADS>(
         if !found_it {
             continue;
         }
+        found += 1;
         let code_hash = get_code_hash(&buf[..size])?;
         if is_empty_code_hash(&code_hash) {
             continue; //non-contract account
@@ -508,7 +514,7 @@ fn warmup_acc<T: ADS>(
         }
         bytecode_map.insert(code_hash, bc.unwrap());
     }
-    Ok(())
+    Ok(found)
 }
 
 fn get_code_hash(entry_bz_data: &[u8]) -> Result<FixedBytes<32>> {
