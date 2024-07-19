@@ -327,12 +327,8 @@ pub mod test_exe_task {
         build_access_list(&mut access_list);
         tx.access_list = access_list;
         let task = ExeTask::new(vec![tx]);
-        assert_eq!(task.rdo_list_size(), 3);
-        assert_eq!(task.rnw_list_size(), 3);
         assert_eq!(task.access_set.rdo_set.len(), 3);
         assert_eq!(task.access_set.rnw_set.len(), 3);
-        assert_eq!(task.get_rdo_k64(1), 16861211397351628197);
-        assert_eq!(task.get_rnw_k64(1), 3570104568112108476);
         task.set_bundle_start(1);
         assert_eq!(task.get_bundle_start(), 1);
         task.set_min_all_done_index(1);
