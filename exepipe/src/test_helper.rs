@@ -27,8 +27,8 @@ pub fn generate_ads_wrap(
     SyncSender<i32>,
     Receiver<i32>,
 ) {
-    let tpool = Arc::new(ThreadPool::new(4));
-    let (sender, receiver) = sync_channel(1000);
+    let tpool = Arc::new(ThreadPool::new(128));
+    let (sender, receiver) = sync_channel(1024);
     AdsCore::init_dir(dir, 64 * 1024);
     let task_hub = Arc::new(BlockPairTaskHub::<SimpleTask>::new());
     let (ads, _, _) = AdsCore::new(task_hub, dir, 8 * 1024, 64 * 1024);
