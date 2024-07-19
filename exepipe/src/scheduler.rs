@@ -1,5 +1,5 @@
 use crate::context;
-use crate::exetask::{ExeTask, AccessSet};
+use crate::exetask::{AccessSet, ExeTask};
 use mpads::def::IN_BLOCK_IDX_BITS;
 use mpads::tasksmanager::TasksManager;
 use mpads::SharedAdsWrap;
@@ -256,7 +256,8 @@ impl Scheduler {
         let target = self.bundles.get_mut(bundle_id).unwrap();
         let bundle_start = self.out_idx;
         while target.len() != 0 {
-            { // move task from the target bundle to tasks_manager
+            {
+                // move task from the target bundle to tasks_manager
                 let task = target.pop_front().unwrap();
                 task.set_bundle_start(bundle_start);
                 // append task to out_vec
@@ -269,20 +270,15 @@ impl Scheduler {
                 // if it's in the first bundle, blk_ctx run it immediately
                 let executed_sender = self.executed_sender.clone();
                 self.tpool.execute(move || {
-                    let results = ctx.warmup(task_idx);
-                    ctx.execute(task_idx, results);
+                    ctx.warmup(task_idx);
+                    ctx.execute(task_idx);
                     executed_sender.send(task_idx as i32).unwrap();
                 });
             } else {
                 let scheduled_chan = self.scheduled_chan.clone();
                 // after prepare_task, the task will be issued by Coordinator
                 self.tpool.execute(move || {
-                    prepare_task_and_send_eei(
-                        task_idx,
-                        bundle_start,
-                        scheduled_chan,
-                        ctx,
-                    );
+                    prepare_task_and_send_eei(task_idx, bundle_start, scheduled_chan, ctx);
                 });
             }
             self.out_idx += 1;
@@ -302,8 +298,7 @@ fn prepare_task_and_send_eei(
     if bundle_start > EARLY_EXE_WINDOW_SIZE {
         stop_detect = bundle_start - EARLY_EXE_WINDOW_SIZE;
     }
-    let results = blk_ctx.warmup(my_idx);
-    task.warmup_results = results;
+    blk_ctx.warmup(my_idx);
     let mut min_all_done_index = {
         if stop_detect == 0 {
             0

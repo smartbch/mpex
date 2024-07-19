@@ -130,7 +130,7 @@ impl<T: ADS> BlockContext<T> {
             .collect();
     }
 
-    pub fn warmup(&self, idx: usize) -> Vec<Option<Error>> {
+    pub fn warmup(&self, idx: usize) {
         if idx == 0 {
             // warmup coinbase account when the first task
             let mut buf = Vec::with_capacity(8192);
@@ -145,14 +145,12 @@ impl<T: ADS> BlockContext<T> {
 
         let mut task_opt = self.tasks_manager.task_for_write(idx);
         let task = task_opt.as_mut().unwrap();
-        let tx_nums = task.tx_list.len();
-        let mut results = Vec::<Option<Error>>::with_capacity(tx_nums);
         for tx in &task.tx_list {
-            results.push(warmup_tx(&tx, &self.ads, &self.curr_state.bytecode_map).err());
+            task.warmup_results
+                .push(warmup_tx(&tx, &self.ads, &self.curr_state.bytecode_map).err());
         }
         // rewrite access_list for adapting revm
         task.rewrite_txs_access_list();
-        results
     }
 
     fn collect_gas_fee(&self, gas_fee_delta: U256) {
@@ -160,18 +158,13 @@ impl<T: ADS> BlockContext<T> {
         *gas_fee = (*gas_fee).saturating_add(gas_fee_delta.clone());
     }
 
-    pub fn execute(&self, idx: usize, warmup_results: Vec<Option<Error>>) {
+    pub fn execute(&self, idx: usize) {
         let mut task_opt = self.tasks_manager.task_for_write(idx);
         let task = task_opt.as_mut().unwrap();
-        let mut warmup_res = &warmup_results;
-        if warmup_res.is_empty() {
-            warmup_res = &task.warmup_results;
-        }
         let mut change_sets = Vec::with_capacity(task.tx_list.len());
         let mut task_result: Vec<Result<ResultAndState>> = Vec::new();
         for index in 0..task.tx_list.len() {
-            let (tx_result, mut change_set) =
-                self.handle_transaction(&task, index, &warmup_res[index]);
+            let (tx_result, mut change_set) = self.handle_transaction(&task, index);
             task_result.extend(tx_result);
             change_set.sort();
             self.curr_state.apply_change(&change_set);
@@ -187,7 +180,6 @@ impl<T: ADS> BlockContext<T> {
         &self,
         task: &ExeTask,
         index: usize,
-        warmup_result: &Option<Error>,
     ) -> (Vec<Result<ResultAndState>>, ChangeSet) {
         let tx = &task.tx_list[index];
         let env = Box::new(Env {
@@ -197,7 +189,7 @@ impl<T: ADS> BlockContext<T> {
         });
         let coinbase_gas_price = get_gas_price(&env);
         let mut tx_result: Vec<Result<ResultAndState>> = Vec::new();
-        if let Some(error) = warmup_result {
+        if let Some(error) = &task.warmup_results[index] {
             tx_result.push(Err(anyhow!("Tx {:?} warmup error: {:?}", index, error)));
             let change_set = self.handle_tx_execute_mpex_err(&tx, coinbase_gas_price);
             return (tx_result, change_set);
@@ -261,7 +253,7 @@ impl<T: ADS> BlockContext<T> {
 
     // handle_tx_execute_mpex_err will be call at errors because:
     // 1. warmup generates errors
-    // 2. revm.transact gets errors from 'Database' or handlers and returns them 
+    // 2. revm.transact gets errors from 'Database' or handlers and returns them
     // 2. get_change_set_and_check_access_rw returns error of writing readonly data
     fn handle_tx_execute_mpex_err(&self, tx: &TxEnv, coinbase_gas_price: U256) -> ChangeSet {
         let mut orig_acc_map: HashMap<Address, [u8; 72]> = HashMap::new();

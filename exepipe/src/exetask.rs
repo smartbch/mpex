@@ -107,8 +107,7 @@ pub struct ExeTask {
 
 impl Task for ExeTask {
     fn get_change_sets(&self) -> Arc<Vec<ChangeSet>> {
-        let change_set: &Arc<Vec<ChangeSet>> =
-            self.change_sets.as_ref().unwrap();
+        let change_set: &Arc<Vec<ChangeSet>> = self.change_sets.as_ref().unwrap();
         change_set.clone()
     }
 }
@@ -140,13 +139,13 @@ impl ExeTask {
         }
 
         Self {
+            warmup_results: Vec::with_capacity(tx_list.len()),
             tx_list,
             access_set,
             change_sets: None,
             bundle_start: AtomicUsize::new(usize::MAX),
             min_all_done_index: AtomicUsize::new(usize::MAX),
             tx_accessed_slots_counts,
-            warmup_results: vec![],
         }
     }
 
