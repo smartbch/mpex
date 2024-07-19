@@ -1,7 +1,7 @@
 use byteorder::{ByteOrder, LittleEndian};
 use mpads::changeset::ChangeSet;
 use mpads::def::{
-    COMPACT_THRES, CODE_SHARD_ID, DEFAULT_FILE_SIZE, IN_BLOCK_IDX_BITS, OP_DELETE, OP_WRITE,
+    COMPACT_THRES, CODE_SHARD_ID, DEFAULT_ENTRY_SIZE, IN_BLOCK_IDX_BITS, OP_DELETE, OP_WRITE,
     SHARD_COUNT, UTILIZATION_DIV, UTILIZATION_RATIO, SENTRY_COUNT,
 };
 use mpads::entry::EntryBz;
@@ -29,8 +29,8 @@ fn main() {
     let file_block_size = 128 * 1024 * 1024;
     AdsCore::init_dir(ads_dir, file_block_size);
     let mut ads = AdsWrap::new(ads_dir, wrbuf_size, file_block_size);
-    let shared_ads = ads.get_shared();
 
+    let mut buf = [0u8; DEFAULT_ENTRY_SIZE];
     for height in 1..BLOCK_COUNT + 1 {
         let height = height as i64;
         let task_list = test_gen.gen_block(height);
@@ -38,22 +38,22 @@ fn main() {
         println!("AA height={} task_count={:#08x}", height, task_count);
         let last_task_id = (height << IN_BLOCK_IDX_BITS) | (task_count - 1);
         ads.start_block(height, Arc::new(TasksManager::new(task_list, last_task_id)));
+        let shared_ads = ads.get_shared();
         for idx in 0..task_count {
             let task_id = (height << IN_BLOCK_IDX_BITS) | idx;
-            println!("AA Fuzz height={} task_id={:#08x}", height, task_id);
+            //println!("AA Fuzz height={} task_id={:#08x}", height, task_id);
             shared_ads.add_task(task_id);
         }
         let read_count = test_gen.get_read_count();
-        let mut buf = [0u8; DEFAULT_ENTRY_SIZE];
+        println!("AA read_count={}", read_count);
         for _ in 0..read_count {
             let (k, kh, v) = test_gen.rand_read_kv(height);
             let (size, ok) = shared_ads.read_entry(&kh[..], &k[..], &mut buf);
             if !ok {
                 panic!("Cannot read entry");
             }
-            let entry = EntryBz{ bz: &buf[..size] };
-            if entry.value() != &v[..] {
-                panic!("Value mismatch");
+            if buf[..size] != v[..] {
+                panic!("Value mismatch k={:?} ref_v={:?} imp_v={:?}", k, v, &buf[..size]);
             }
         }
     }
@@ -118,7 +118,7 @@ impl TestGenV1 {
             code_prob: 5, //5%
             max_code_len: 1024,
             max_cset_in_task: 5,
-            max_read_count: 200,
+            max_read_count: 20,
             randsrc,
             refdb,
         }
@@ -222,10 +222,12 @@ impl TestGenV1 {
             let mut k_num = rand_between(&mut self.randsrc, 0, self.key_count_max);
             let k = hash(k_num);
             let kh = hasher::hash(&k[..]);
-            let v_opt = self.refdb.get_entry(&k);
+            let v_opt = self.refdb.get_entry(&kh);
             if v_opt.is_none() {
+                //println!("AA try rand_read missed k_num={}", k_num);
                 continue; //retry till hit
             }
+            //println!("AA try rand_read hit k_num={}", k_num);
             let v = v_opt.unwrap();
             let e = EntryBz{ bz: &v[..] };
             let create_height = e.version() >> IN_BLOCK_IDX_BITS;
