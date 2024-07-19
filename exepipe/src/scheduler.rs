@@ -22,7 +22,7 @@ pub const EARLY_EXE_WINDOW_SIZE: usize = 128;
 pub type BlockContext = context::BlockContext<SharedAdsWrap>;
 
 // 64 BloomFilters in parallel
-struct ParaBloom {
+pub struct ParaBloom {
     rdo_arr: [u64; BLOOM_BITS as usize],
     rnw_arr: [u64; BLOOM_BITS as usize],
     rdo_set_size: [usize; BUNDLE_COUNT],
@@ -30,7 +30,7 @@ struct ParaBloom {
 }
 
 impl ParaBloom {
-    fn new() -> ParaBloom {
+    pub fn new() -> ParaBloom {
         ParaBloom {
             rdo_arr: [0u64; BLOOM_BITS as usize],
             rnw_arr: [0u64; BLOOM_BITS as usize],
@@ -79,15 +79,15 @@ impl ParaBloom {
         self.rnw_set_size[id] += 1;
     }
 
-    fn get_rdo_set_size(&self, id: usize) -> usize {
+    pub fn get_rdo_set_size(&self, id: usize) -> usize {
         return self.rdo_set_size[id];
     }
 
-    fn get_rnw_set_size(&self, id: usize) -> usize {
+    pub fn get_rnw_set_size(&self, id: usize) -> usize {
         return self.rnw_set_size[id];
     }
 
-    fn clear(&mut self, id: usize) {
+    pub fn clear(&mut self, id: usize) {
         let keep_mask = !(1u64 << id); //clear 'id', keep other bits
         for idx in 0..(BLOOM_BITS as usize) {
             self.rdo_arr[idx] &= keep_mask;
@@ -97,7 +97,7 @@ impl ParaBloom {
         self.rnw_set_size[id] = 0;
     }
 
-    fn clear_all(&mut self) {
+    pub fn clear_all(&mut self) {
         for idx in 0..(BLOOM_BITS as usize) {
             self.rdo_arr[idx] = 0;
             self.rnw_arr[idx] = 0;
@@ -108,7 +108,7 @@ impl ParaBloom {
         }
     }
 
-    fn get_dep_mask(&self, access_set: &AccessSet) -> u64 {
+    pub fn get_dep_mask(&self, access_set: &AccessSet) -> u64 {
         let mut mask = 0u64;
         // other.rdo vs self.rnw
         for &k64 in access_set.rdo_k64_vec.iter() {
@@ -122,7 +122,7 @@ impl ParaBloom {
         mask
     }
 
-    fn add(&mut self, id: usize, access_set: &AccessSet) {
+    pub fn add(&mut self, id: usize, access_set: &AccessSet) {
         for &k64 in access_set.rdo_k64_vec.iter() {
             self.add_rdo_k64(id, k64);
         }

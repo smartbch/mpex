@@ -507,7 +507,9 @@ dependencies = [
 name = "depanalyzer"
 version = "0.1.0"
 dependencies = [
+ "byteorder",
  "exepipe",
+ "mpads",
  "serde",
  "serde_json",
 ]

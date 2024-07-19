@@ -5,5 +5,8 @@ edition = "2021"
 
 [dependencies]
 exepipe = { path = "../exepipe" }
+mpads = { path = "../mpads" }
 serde = { version = "1.0.204", features = ["derive"] }
 serde_json = "1.0.120"
+byteorder = "1.5.0"
+
