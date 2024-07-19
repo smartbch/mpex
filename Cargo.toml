@@ -4,6 +4,7 @@ members = [
     "mpads",
     "exepipe",
     "tester",
+    "depanalyzer",
     "randsrc",
 ]
 
