@@ -153,18 +153,6 @@ impl ExeTask {
     pub fn set_change_sets(&mut self, change_sets: Arc<Vec<ChangeSet>>) {
         self.change_sets = Some(change_sets);
     }
-    pub fn rdo_list_size(&self) -> usize {
-        self.access_set.rdo_k64_vec.len()
-    }
-    pub fn rnw_list_size(&self) -> usize {
-        self.access_set.rnw_k64_vec.len()
-    }
-    pub fn get_rdo_k64(&self, idx: usize) -> u64 {
-        self.access_set.rdo_k64_vec[idx]
-    }
-    pub fn get_rnw_k64(&self, idx: usize) -> u64 {
-        self.access_set.rnw_k64_vec[idx]
-    }
     pub fn set_bundle_start(&self, bundle_start: usize) {
         self.bundle_start.store(bundle_start, Ordering::SeqCst);
     }

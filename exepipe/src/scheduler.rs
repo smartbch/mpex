@@ -1,5 +1,5 @@
 use crate::context;
-use crate::exetask::ExeTask;
+use crate::exetask::{ExeTask, AccessSet};
 use mpads::def::IN_BLOCK_IDX_BITS;
 use mpads::tasksmanager::TasksManager;
 use mpads::SharedAdsWrap;
@@ -107,6 +107,29 @@ impl ParaBloom {
             self.rnw_set_size[id] = 0;
         }
     }
+
+    fn get_dep_mask(&self, access_set: &AccessSet) -> u64 {
+        let mut mask = 0u64;
+        // other.rdo vs self.rnw
+        for &k64 in access_set.rdo_k64_vec.iter() {
+            mask |= self.get_rnw_mask(k64);
+        }
+        // others.rnw vs self.rdo+self.rnw
+        for &k64 in access_set.rnw_k64_vec.iter() {
+            mask |= self.get_rdo_mask(k64);
+            mask |= self.get_rnw_mask(k64);
+        }
+        mask
+    }
+
+    fn add(&mut self, id: usize, access_set: &AccessSet) {
+        for &k64 in access_set.rdo_k64_vec.iter() {
+            self.add_rdo_k64(id, k64);
+        }
+        for &k64 in access_set.rnw_k64_vec.iter() {
+            self.add_rnw_k64(id, k64);
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -186,18 +209,7 @@ impl Scheduler {
     }
 
     fn add_task(&mut self, task: ExeTask) {
-        let mut mask = 0u64;
-        // task.rdo vs pb.rnw
-        for i in 0..task.rdo_list_size() {
-            let k64 = task.get_rdo_k64(i);
-            mask |= self.pb.get_rnw_mask(k64);
-        }
-        // task.rnw vs pb.rdo+pb.rnw
-        for i in 0..task.rnw_list_size() {
-            let k64 = task.get_rnw_k64(i);
-            mask |= self.pb.get_rdo_mask(k64);
-            mask |= self.pb.get_rnw_mask(k64);
-        }
+        let mask = self.pb.get_dep_mask(&task.access_set);
         let mut bundle_id = mask.trailing_ones() as usize;
         // if we cannot find a bundle to insert task because
         // it conflicts with all the bundles
@@ -215,12 +227,7 @@ impl Scheduler {
         }
 
         // now the task can be inserted into a bundle
-        for i in 0..task.rdo_list_size() {
-            self.pb.add_rdo_k64(bundle_id, task.get_rdo_k64(i));
-        }
-        for i in 0..task.rnw_list_size() {
-            self.pb.add_rnw_k64(bundle_id, task.get_rnw_k64(i));
-        }
+        self.pb.add(bundle_id, &task.access_set);
 
         let target = self.bundles.get_mut(bundle_id).unwrap();
         target.push_back(task);
@@ -324,23 +331,21 @@ fn prepare_task_and_send_eei(
 
 //'a' task conflicts with 'b' task
 fn task_conflicts(a: &ExeTask, b: &ExeTask) -> bool {
-    for i in 0..a.rdo_list_size() {
-        let k64 = a.get_rdo_k64(i);
-        for j in 0..b.rnw_list_size() {
-            if k64 == b.get_rnw_k64(j) {
+    for &k64a in a.access_set.rdo_k64_vec.iter() {
+        for &k64b in b.access_set.rnw_k64_vec.iter() {
+            if k64a == k64b {
                 return true;
             }
         }
     }
-    for i in 0..a.rnw_list_size() {
-        let k64 = a.get_rnw_k64(i);
-        for j in 0..b.rdo_list_size() {
-            if k64 == b.get_rdo_k64(j) {
+    for &k64a in a.access_set.rnw_k64_vec.iter() {
+        for &k64b in b.access_set.rdo_k64_vec.iter() {
+            if k64a == k64b {
                 return true;
             }
         }
-        for j in 0..b.rnw_list_size() {
-            if k64 == b.get_rnw_k64(j) {
+        for &k64b in b.access_set.rnw_k64_vec.iter() {
+            if k64a == k64b {
                 return true;
             }
         }
