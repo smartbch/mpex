@@ -127,22 +127,52 @@ mod tests {
     }
 
     #[test]
-    fn test_error_when_create_empty_account() {
+    fn test_error_when_warmup() {
         let from = address!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
         let to_address = address!("00000000000000000000000000000000000000a3");
+        let coinbase = address!("000000000000000000000000000000000000cbcb");
 
-        let init_balance = 1_000_000_000_000_000_000u128 + 2 * (2 * 21000 + 1);
+        let init_balance = 1_000_000_000_000_000_000u128;
 
-        let block_ctx = create_transfer(from, to_address, init_balance, Address::ZERO, false);
+        let block_ctx = create_transfer(from, to_address, init_balance, coinbase, false);
 
         block_ctx.warmup(0);
         block_ctx.execute(0);
         block_ctx.end_block();
 
         // println!("block_ctx.results = {:?}", block_ctx.results);
-        check_account_info(block_ctx.curr_state.clone(), &from, 0, 2);
+        let r = block_ctx.results[0].read().unwrap();
+        let s = r.deref().as_ref().unwrap()[0].as_ref().unwrap_err();
+        assert!(format!("{:?}", s).contains("Tx 0 warmup error: Cannot find caller account"));
+
+        check_account_info(block_ctx.curr_state.clone(), &from, 0, 0);
         check_account_info(block_ctx.curr_state.clone(), &to_address, 0, 0);
-        check_account_info(block_ctx.curr_state.clone(), &Address::ZERO, 0, 0);
+        check_account_info(block_ctx.curr_state.clone(), &coinbase, 0, 0);
+    }
+
+    #[test]
+    fn test_error_when_create_empty_account() {
+        let from = address!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        let to_address = address!("00000000000000000000000000000000000000a3");
+
+        let init_balance = 1_000_000_000_000_000_000u128 + 2 * (2 * 21000 + 1);
+
+        let block_ctx = create_transfer(from, to_address, init_balance, Address::ZERO, true);
+        {
+            let mut opt = block_ctx.tasks_manager.task_for_write(0);
+            let task = opt.as_mut().unwrap();
+            task.tx_list[0].value = U256::ZERO;
+            task.tx_list[1].value = U256::ZERO;
+        }
+
+        block_ctx.warmup(0);
+        block_ctx.execute(0);
+        block_ctx.end_block();
+
+        // println!("block_ctx.results = {:?}", block_ctx.results);
+        check_account_info(block_ctx.curr_state.clone(), &from, 1000000000000000002, 2);
+        check_account_info(block_ctx.curr_state.clone(), &to_address, 0, 0);
+        check_account_info(block_ctx.curr_state.clone(), &Address::ZERO, 84000, 0);
     }
 
     #[test]

@@ -188,11 +188,10 @@ impl<T: ADS> BlockContext<T> {
         });
         let coinbase_gas_price = get_gas_price(&env);
         let mut tx_result: Vec<Result<ResultAndState>> = Vec::new();
-        let warm_r = task.warmup_results.get(index);
-        if warm_r.is_none() {
-            panic!("Warmup result is None");
+        if index >= task.warmup_results.len() {
+            panic!("Internal error! No warmup result for tx index{}", index);
         }
-        if let Some(error) = warm_r {
+        if let Some(error) = &task.warmup_results[index] {
             tx_result.push(Err(anyhow!("Tx {:?} warmup error: {:?}", index, error)));
             let change_set = self.handle_tx_execute_mpex_err(&tx, coinbase_gas_price);
             return (tx_result, change_set);
