@@ -53,7 +53,7 @@ mod tests {
         let (ca_addr, slotmap) = get_slotmap_and_set_state(blk_ctx.curr_state.as_ref());
 
         // transfer  tokens
-        let tasks_in = create_conflict_tasks(&slotmap, &ca_addr, 2, 2);
+        let tasks_in = create_conflict_tasks(&slotmap, &ca_addr, 20, 500);
         let task_list = (0..tasks_in.len() + 1)
             .map(|_| RwLock::new(Option::None))
             .collect();
