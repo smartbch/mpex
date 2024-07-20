@@ -142,7 +142,6 @@ impl<T: ADS> BlockContext<T> {
                 &mut buf,
             );
         }
-
         let mut task_opt = self.tasks_manager.task_for_write(idx);
         let task = task_opt.as_mut().unwrap();
         for tx in &task.tx_list {
@@ -189,7 +188,11 @@ impl<T: ADS> BlockContext<T> {
         });
         let coinbase_gas_price = get_gas_price(&env);
         let mut tx_result: Vec<Result<ResultAndState>> = Vec::new();
-        if let Some(error) = &task.warmup_results[index] {
+        let warm_r = task.warmup_results.get(index);
+        if warm_r.is_none() {
+            panic!("Warmup result is None");
+        }
+        if let Some(error) = warm_r {
             tx_result.push(Err(anyhow!("Tx {:?} warmup error: {:?}", index, error)));
             let change_set = self.handle_tx_execute_mpex_err(&tx, coinbase_gas_price);
             return (tx_result, change_set);
@@ -595,7 +598,7 @@ mod tests {
 
         let bytecode_map: Arc<CodeMap> = Arc::new(DashMap::new());
         let mut buf: Vec<u8> = vec![0u8; 1024];
-        warmup_acc(&ads, &u256list, &bytecode_map, &mut buf);
+        let _ = warmup_acc(&ads, &u256list, &bytecode_map, &mut buf);
         assert!(bytecode_map.contains_key(&code_hash));
     }
 
@@ -628,9 +631,10 @@ mod tests {
         acc_list.push((addr4, vec![addr_to_u256(&addr_d)]));
         let mut tx = TxEnv::default();
         tx.access_list = acc_list;
+        ads.add_account(&tx.caller, &AccountInfo::default());
 
         let bytecode_map: Arc<CodeMap> = Arc::new(DashMap::new());
-        warmup_tx(&tx, &ads, &bytecode_map);
+        let _ = warmup_tx(&tx, &ads, &bytecode_map);
 
         assert!(bytecode_map.contains_key(&code_hash1));
         assert!(bytecode_map.contains_key(&code_hash2));
@@ -664,6 +668,7 @@ mod tests {
 
         let mut tx = TxEnv::default();
         tx.access_list.push((addr1, vec![addr_to_u256(&addr_a)]));
+        ads.add_account(&tx.caller, &AccountInfo::default());
         let tx_list = vec![tx];
         let task = RwLock::new(Option::Some(ExeTask::new(tx_list)));
         let task_list = vec![task];

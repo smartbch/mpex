@@ -44,9 +44,15 @@ impl<T: Task> TasksManager<T> {
     }
 
     pub fn task_for_read(&self, idx: usize) -> RwLockReadGuard<Option<T>> {
+        if idx >= self.tasks.len() {
+            panic!("task index out of range");
+        }
         self.tasks[idx].read().unwrap()
     }
     pub fn task_for_write(&self, idx: usize) -> RwLockWriteGuard<Option<T>> {
+        if idx >= self.tasks.len() {
+            panic!("task index out of range");
+        }
         self.tasks[idx].write().unwrap()
     }
 }

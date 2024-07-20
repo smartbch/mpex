@@ -131,7 +131,7 @@ mod tests {
     use std::sync::{Arc, RwLock};
 
     use mpads::{tasksmanager::TasksManager, test_helper::TempDir};
-    use revm::primitives::{BlockEnv, TxEnv};
+    use revm::primitives::{bitvec::vec, BlockEnv, TxEnv};
 
     use crate::{
         context::BlockContext, coordinator::Coordinator, exetask::ExeTask, scheduler::EarlyExeInfo,
@@ -221,6 +221,11 @@ mod tests {
             tx.access_list = vec![];
             let tx_list: Vec<TxEnv> = vec![tx];
             let task = RwLock::new(Some(ExeTask::new(tx_list)));
+            {
+                let mut task_opt = task.write().unwrap();
+                let _task = task_opt.as_mut().unwrap();
+                _task.warmup_results = vec![Option::None];
+            }
             tasks.push(task);
         }
         blk_ctx.start_new_block(
@@ -258,6 +263,11 @@ mod tests {
             tx.access_list = vec![];
             let tx_list: Vec<TxEnv> = vec![tx];
             let task = RwLock::new(Some(ExeTask::new(tx_list)));
+            {
+                let mut task_opt = task.write().unwrap();
+                let _task = task_opt.as_mut().unwrap();
+                _task.warmup_results = vec![Option::None];
+            }
             tasks.push(task);
         }
         blk_ctx.start_new_block(

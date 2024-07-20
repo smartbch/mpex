@@ -193,7 +193,7 @@ impl Scheduler {
         self.out_idx = 0;
     }
 
-    pub fn first_large_enough_bundle(&self) -> usize {
+    pub fn first_can_flush_bundle(&self) -> usize {
         for i in 0..BUNDLE_COUNT {
             if self.bundles[i].len() > MIN_TX_IN_BUNDLE {
                 return i;
@@ -214,7 +214,7 @@ impl Scheduler {
         // if we cannot find a bundle to insert task because
         // it conflicts with all the bundles
         if bundle_id == BUNDLE_COUNT {
-            bundle_id = self.first_large_enough_bundle();
+            bundle_id = self.first_can_flush_bundle();
             if bundle_id < BUNDLE_COUNT {
                 // if we find a large enough bundle, flush it
                 self.pb.clear(bundle_id);
@@ -254,19 +254,19 @@ impl Scheduler {
 
     fn flush_bundle(&mut self, bundle_id: usize) {
         let target = self.bundles.get_mut(bundle_id).unwrap();
-        let bundle_start = self.out_idx;
+        let task_out_start = self.out_idx;
         while target.len() != 0 {
             {
                 // move task from the target bundle to tasks_manager
                 let task = target.pop_front().unwrap();
-                task.set_bundle_start(bundle_start);
+                task.set_task_out_start(task_out_start);
                 // append task to out_vec
                 let mut out_ptr = self.blk_ctx.tasks_manager.task_for_write(self.out_idx);
                 *out_ptr = Some(task);
             }
             let ctx = self.blk_ctx.clone();
             let task_idx = self.out_idx;
-            if bundle_start == 0 {
+            if task_out_start == 0 {
                 // if it's in the first bundle, blk_ctx run it immediately
                 let executed_sender = self.executed_sender.clone();
                 self.tpool.execute(move || {
@@ -278,7 +278,7 @@ impl Scheduler {
                 let scheduled_chan = self.scheduled_chan.clone();
                 // after prepare_task, the task will be issued by Coordinator
                 self.tpool.execute(move || {
-                    prepare_task_and_send_eei(task_idx, bundle_start, scheduled_chan, ctx);
+                    prepare_task_and_send_eei(task_idx, task_out_start, scheduled_chan, ctx);
                 });
             }
             self.out_idx += 1;
@@ -288,15 +288,13 @@ impl Scheduler {
 
 fn prepare_task_and_send_eei(
     my_idx: usize,
-    bundle_start: usize,
+    task_out_start: usize,
     scheduled_chan: mpsc::SyncSender<EarlyExeInfo>,
     blk_ctx: Arc<BlockContext>,
 ) {
-    let mut task_opt = blk_ctx.tasks_manager.task_for_write(my_idx);
-    let task = task_opt.as_mut().unwrap();
     let mut stop_detect = 0;
-    if bundle_start > EARLY_EXE_WINDOW_SIZE {
-        stop_detect = bundle_start - EARLY_EXE_WINDOW_SIZE;
+    if task_out_start > EARLY_EXE_WINDOW_SIZE {
+        stop_detect = task_out_start - EARLY_EXE_WINDOW_SIZE;
     }
     blk_ctx.warmup(my_idx);
     let mut min_all_done_index = {
@@ -306,8 +304,11 @@ fn prepare_task_and_send_eei(
             stop_detect - 1
         }
     };
+
+    let mut task_opt = blk_ctx.tasks_manager.task_for_write(my_idx);
+    let task = task_opt.as_mut().unwrap();
     // find the smallest early_idx
-    for early_idx in (stop_detect..bundle_start).rev() {
+    for early_idx in (stop_detect..task_out_start).rev() {
         let other_opt = blk_ctx.tasks_manager.task_for_read(early_idx);
         let other = other_opt.as_ref().unwrap();
         // stop loop when we find a conflicting peer
@@ -589,7 +590,7 @@ mod tests {
             scheduler.add_task(task);
         }
         assert_eq!(scheduler.pb.get_rdo_set_size(0), 0);
-        assert_eq!(scheduler.pb.get_rnw_set_size(0), 17);
+        assert_eq!(scheduler.pb.get_rnw_set_size(0), MIN_TX_IN_BUNDLE + 1);
         assert_eq!(scheduler.out_idx, 0);
 
         let mut tx = TxEnv::default();
@@ -602,7 +603,7 @@ mod tests {
         // flush_bundle:: if it's in the first bundle, blk_ctx run it immediately
         assert_eq!(scheduler.pb.get_rdo_set_size(0), 0);
         assert_eq!(scheduler.pb.get_rnw_set_size(0), 1);
-        assert_eq!(scheduler.out_idx, 17);
+        assert_eq!(scheduler.out_idx, MIN_TX_IN_BUNDLE + 1);
 
         // target.len() >= MAX_TX_IN_BUNDLE
         //flush the bundle if it's large enough
@@ -620,8 +621,12 @@ mod tests {
         let _count = recived_count.clone();
         thread::spawn(move || {
             while let Ok(received) = receiver.recv() {
-                if received.my_idx <= 33 {
-                    assert_eq!(received.my_idx - received.min_all_done_index, 17);
+                assert!(received.my_idx >= 9);
+                if received.my_idx <= 17 {
+                    assert_eq!(
+                        received.my_idx - received.min_all_done_index,
+                        MIN_TX_IN_BUNDLE as i32 + 1
+                    );
                 } else {
                     assert_eq!(received.min_all_done_index, 0);
                 }
@@ -629,17 +634,19 @@ mod tests {
                 *count += 1;
             }
         });
+
         thread::sleep(std::time::Duration::from_secs(1));
 
         let task = scheduler.blk_ctx.tasks_manager.task_for_read(17);
+
         let t = task.as_ref().unwrap();
-        assert_eq!(t.get_min_all_done_index(), 0);
-        assert_eq!(t.get_bundle_start(), 17);
+        assert_eq!(t.get_min_all_done_index(), 8);
+        assert_eq!(t.get_task_out_start(), 9);
 
         assert_eq!(*recived_count.lock().unwrap(), 64);
         assert_eq!(scheduler.pb.get_rdo_set_size(0), 0);
         assert_eq!(scheduler.pb.get_rnw_set_size(0), 0);
-        assert_eq!(scheduler.out_idx, 81);
+        assert_eq!(scheduler.out_idx, 73);
         assert_eq!(scheduler.bundles[0].len(), 0);
     }
 

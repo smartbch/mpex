@@ -78,11 +78,13 @@ impl MockADS {
 
     pub fn add_account(&mut self, addr: &Address, info: &AccountInfo) -> Hash32 {
         if let Some(code) = &info.code {
-            let code_data = bincode::serialize(&Option::Some(code)).unwrap();
-            let code_hash = hasher::hash(&code_data);
-            self.code_map.insert(code_hash, code_data);
+            if (code != &Bytecode::new()) {
+                let code_data = bincode::serialize(&Option::Some(code)).unwrap();
+                let code_hash = hasher::hash(&code_data);
+                self.code_map.insert(code_hash, code_data);
 
-            assert_eq!(info.code_hash, B256::new(code_hash));
+                assert_eq!(info.code_hash, B256::new(code_hash));
+            }
         }
 
         let v = encode_account_info(info);

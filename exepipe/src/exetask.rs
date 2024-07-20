@@ -99,7 +99,7 @@ pub struct ExeTask {
     pub tx_list: Vec<TxEnv>,
     pub access_set: AccessSet,
     pub change_sets: Option<Arc<Vec<ChangeSet>>>,
-    bundle_start: AtomicUsize,
+    task_out_start: AtomicUsize,
     min_all_done_index: AtomicUsize,
     tx_accessed_slots_counts: Vec<u64>,
     pub warmup_results: Vec<Option<Error>>,
@@ -143,7 +143,7 @@ impl ExeTask {
             tx_list,
             access_set,
             change_sets: None,
-            bundle_start: AtomicUsize::new(usize::MAX),
+            task_out_start: AtomicUsize::new(usize::MAX),
             min_all_done_index: AtomicUsize::new(usize::MAX),
             tx_accessed_slots_counts,
         }
@@ -152,11 +152,11 @@ impl ExeTask {
     pub fn set_change_sets(&mut self, change_sets: Arc<Vec<ChangeSet>>) {
         self.change_sets = Some(change_sets);
     }
-    pub fn set_bundle_start(&self, bundle_start: usize) {
-        self.bundle_start.store(bundle_start, Ordering::SeqCst);
+    pub fn set_task_out_start(&self, bundle_start: usize) {
+        self.task_out_start.store(bundle_start, Ordering::SeqCst);
     }
-    pub fn get_bundle_start(&self) -> usize {
-        self.bundle_start.load(Ordering::SeqCst)
+    pub fn get_task_out_start(&self) -> usize {
+        self.task_out_start.load(Ordering::SeqCst)
     }
     pub fn set_min_all_done_index(&self, min_all_done_index: usize) {
         self.min_all_done_index
@@ -328,8 +328,8 @@ pub mod test_exe_task {
         let task = ExeTask::new(vec![tx]);
         assert_eq!(task.access_set.rdo_set.len(), 3);
         assert_eq!(task.access_set.rnw_set.len(), 3);
-        task.set_bundle_start(1);
-        assert_eq!(task.get_bundle_start(), 1);
+        task.set_task_out_start(1);
+        assert_eq!(task.get_task_out_start(), 1);
         task.set_min_all_done_index(1);
         assert_eq!(task.get_min_all_done_index(), 1);
     }
