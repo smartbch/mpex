@@ -8,6 +8,7 @@ use std::mem;
 use std::sync::mpsc;
 use std::sync::Arc;
 use threadpool::ThreadPool;
+use num_traits::Num;
 
 pub const FUNC_COUNT: usize = 5; //hash function count for bloomfilter
 pub const BLOOM_BITS_SHIFT: u64 = 11; // 11*5 = 55 < 64
@@ -21,59 +22,75 @@ pub const EARLY_EXE_WINDOW_SIZE: usize = 128;
 
 pub type BlockContext = context::BlockContext<SharedAdsWrap>;
 
+pub trait PBElement:
+    Num +
+    std::marker::Copy +
+    std::ops::BitAnd<Output = Self> +
+    std::ops::BitOr<Output = Self> +
+    std::ops::Not<Output = Self> +
+    std::ops::Shl<usize, Output = Self>
+{}
+
+impl PBElement for u16 {}
+impl PBElement for u32 {}
+impl PBElement for u64 {}
+impl PBElement for u128 {}
+
 // 64 BloomFilters in parallel
-pub struct ParaBloom {
-    rdo_arr: [u64; BLOOM_BITS as usize],
-    rnw_arr: [u64; BLOOM_BITS as usize],
+pub struct ParaBloom<T: PBElement> {
+    rdo_arr: [T; BLOOM_BITS as usize],
+    rnw_arr: [T; BLOOM_BITS as usize],
     rdo_set_size: [usize; BUNDLE_COUNT],
     rnw_set_size: [usize; BUNDLE_COUNT],
 }
 
-impl ParaBloom {
-    pub fn new() -> ParaBloom {
-        ParaBloom {
-            rdo_arr: [0u64; BLOOM_BITS as usize],
-            rnw_arr: [0u64; BLOOM_BITS as usize],
+type ParaBloom64 = ParaBloom<u64>;
+
+impl<T: PBElement> ParaBloom<T> {
+    pub fn new() -> ParaBloom<T> {
+        ParaBloom::<T> {
+            rdo_arr: [T::zero(); BLOOM_BITS as usize],
+            rnw_arr: [T::zero(); BLOOM_BITS as usize],
             rdo_set_size: [0usize; BUNDLE_COUNT],
             rnw_set_size: [0usize; BUNDLE_COUNT],
         }
     }
 
-    fn get_rdo_mask(&self, mut k64: u64) -> u64 {
-        let mut rdo_mask = u64::MAX; //all-ones
+    fn get_rdo_mask(&self, mut k64: u64) -> T {
+        let mut rdo_mask = !T::zero(); // all-ones
         for _ in 0..FUNC_COUNT {
             let idx = (k64 & BLOOM_BITS_MASK) as usize;
-            rdo_mask &= self.rdo_arr[idx]; //bitwise-and
+            rdo_mask = rdo_mask & self.rdo_arr[idx]; //bitwise-and
             k64 >>= BLOOM_BITS_SHIFT;
         }
         rdo_mask
     }
 
-    fn get_rnw_mask(&self, mut k64: u64) -> u64 {
-        let mut rnw_mask = u64::MAX; //all-ones
+    fn get_rnw_mask(&self, mut k64: u64) -> T {
+        let mut rnw_mask = !T::zero(); // all-ones
         for _ in 0..FUNC_COUNT {
             let idx = (k64 & BLOOM_BITS_MASK) as usize;
-            rnw_mask &= self.rnw_arr[idx]; //bitwise-and
+            rnw_mask = rnw_mask & self.rnw_arr[idx]; //bitwise-and
             k64 >>= BLOOM_BITS_SHIFT;
         }
         rnw_mask
     }
 
     fn add_rdo_k64(&mut self, id: usize, mut k64: u64) {
-        let target_bit = 1u64 << id;
+        let target_bit: T = T::one() << id;
         for _ in 0..FUNC_COUNT {
             let idx = (k64 & BLOOM_BITS_MASK) as usize;
-            self.rdo_arr[idx] |= target_bit;
+            self.rdo_arr[idx] = self.rdo_arr[idx] | target_bit;
             k64 >>= BLOOM_BITS_SHIFT;
         }
         self.rdo_set_size[id] += 1;
     }
 
     fn add_rnw_k64(&mut self, id: usize, mut k64: u64) {
-        let target_bit = 1u64 << id;
+        let target_bit: T = T::one() << id;
         for _ in 0..FUNC_COUNT {
             let idx = (k64 & BLOOM_BITS_MASK) as usize;
-            self.rnw_arr[idx] |= target_bit;
+            self.rnw_arr[idx] = self.rnw_arr[idx] | target_bit;
             k64 >>= BLOOM_BITS_SHIFT;
         }
         self.rnw_set_size[id] += 1;
@@ -88,10 +105,10 @@ impl ParaBloom {
     }
 
     pub fn clear(&mut self, id: usize) {
-        let keep_mask = !(1u64 << id); //clear 'id', keep other bits
+        let keep_mask = !(T::one() << id); //clear 'id', keep other bits
         for idx in 0..(BLOOM_BITS as usize) {
-            self.rdo_arr[idx] &= keep_mask;
-            self.rnw_arr[idx] &= keep_mask;
+            self.rdo_arr[idx] = self.rdo_arr[idx] & keep_mask;
+            self.rnw_arr[idx] = self.rnw_arr[idx] & keep_mask;
         }
         self.rdo_set_size[id] = 0;
         self.rnw_set_size[id] = 0;
@@ -99,8 +116,8 @@ impl ParaBloom {
 
     pub fn clear_all(&mut self) {
         for idx in 0..(BLOOM_BITS as usize) {
-            self.rdo_arr[idx] = 0;
-            self.rnw_arr[idx] = 0;
+            self.rdo_arr[idx] = T::zero();
+            self.rnw_arr[idx] = T::zero();
         }
         for id in 0..BUNDLE_COUNT {
             self.rdo_set_size[id] = 0;
@@ -108,16 +125,16 @@ impl ParaBloom {
         }
     }
 
-    pub fn get_dep_mask(&self, access_set: &AccessSet) -> u64 {
-        let mut mask = 0u64;
+    pub fn get_dep_mask(&self, access_set: &AccessSet) -> T {
+        let mut mask = T::zero();
         // other.rdo vs self.rnw
         for &k64 in access_set.rdo_k64_vec.iter() {
-            mask |= self.get_rnw_mask(k64);
+            mask = mask | self.get_rnw_mask(k64);
         }
         // others.rnw vs self.rdo+self.rnw
         for &k64 in access_set.rnw_k64_vec.iter() {
-            mask |= self.get_rdo_mask(k64);
-            mask |= self.get_rnw_mask(k64);
+            mask = mask | self.get_rdo_mask(k64);
+            mask = mask | self.get_rnw_mask(k64);
         }
         mask
     }
@@ -143,7 +160,7 @@ pub struct Scheduler {
     height: i64,
     blk_ctx: Arc<BlockContext>,
 
-    pb: ParaBloom,
+    pb: ParaBloom64,
     bundles: Vec<VecDeque<ExeTask>>,
     fail_vec: Vec<ExeTask>,
     out_idx: usize, // when flush bundle, pop the task in self.bundles to self.blk_ctx.tasks_manager.tasks, and make self.out_idx++ to specific newest task index in self.blk_ctx.tasks_manager.tasks
@@ -166,7 +183,7 @@ impl Scheduler {
         Scheduler {
             height: 0,
             blk_ctx,
-            pb: ParaBloom::new(),
+            pb: ParaBloom64::new(),
             bundles,
             fail_vec: Vec::new(),
             out_idx: 0,
@@ -372,7 +389,7 @@ mod tests {
 
     #[test]
     fn test_parabloom_new() {
-        let pb = ParaBloom::new();
+        let pb = ParaBloom64::new();
 
         assert_eq!(pb.rdo_arr.len(), BLOOM_BITS as usize);
         assert_eq!(pb.rnw_arr.len(), BLOOM_BITS as usize);
@@ -386,7 +403,7 @@ mod tests {
 
     #[test]
     fn test_parabloom_add_and_get_rdo_mask() {
-        let mut pb = ParaBloom::new();
+        let mut pb = ParaBloom64::new();
         let id: usize = 20;
         let key: u64 = 0xFF00_FF00_FF00_FF00;
 
@@ -400,7 +417,7 @@ mod tests {
 
     #[test]
     fn test_parabloom_add_and_get_rnw_mask() {
-        let mut pb = ParaBloom::new();
+        let mut pb = ParaBloom64::new();
         let id: usize = 20;
         let key: u64 = 0xFF00_FF00_FF00_FF00;
 
@@ -414,7 +431,7 @@ mod tests {
 
     #[test]
     fn test_parabloom_clear() {
-        let mut pb = ParaBloom::new();
+        let mut pb = ParaBloom64::new();
         let key: u64 = 12345;
         let id: usize = 1;
 
@@ -432,7 +449,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_parabloom_clear_all() {
-        let mut pb = ParaBloom::new();
+        let mut pb = ParaBloom64::new();
         let key: u64 = 12345;
         let id: usize = 1;
 

@@ -659,6 +659,7 @@ dependencies = [
  "byteorder",
  "dashmap",
  "mpads",
+ "num-traits",
  "revm",
  "serial_test",
  "threadpool",
