@@ -15,8 +15,8 @@ pub const BLOOM_BITS_SHIFT: u64 = 11; // 11*5 = 55 < 64
 pub const BLOOM_BITS: u64 = 1 << BLOOM_BITS_SHIFT; //bit count in one bloomfilter
 pub const BLOOM_BITS_MASK: u64 = BLOOM_BITS - 1;
 pub const SET_MAX_SIZE: usize = BLOOM_BITS as usize / 8;
-pub const MAX_TX_IN_BUNDLE: usize = 64;
-pub const MIN_TX_IN_BUNDLE: usize = 8;
+pub const MAX_TASKS_LEN_IN_BUNDLE: usize = 64;
+pub const MIN_TASKS_IN_IN_BUNDLE: usize = 8;
 pub const BUNDLE_COUNT: usize = 64;
 pub const EARLY_EXE_WINDOW_SIZE: usize = 128;
 
@@ -178,7 +178,7 @@ impl Scheduler {
     ) -> Scheduler {
         let mut bundles = Vec::with_capacity(BUNDLE_COUNT);
         for _ in 0..BUNDLE_COUNT {
-            bundles.push(VecDeque::with_capacity(MAX_TX_IN_BUNDLE));
+            bundles.push(VecDeque::with_capacity(MAX_TASKS_LEN_IN_BUNDLE));
         }
         Scheduler {
             height: 0,
@@ -212,7 +212,7 @@ impl Scheduler {
 
     pub fn first_can_flush_bundle(&self) -> usize {
         for i in 0..BUNDLE_COUNT {
-            if self.bundles[i].len() > MIN_TX_IN_BUNDLE {
+            if self.bundles[i].len() > MIN_TASKS_IN_IN_BUNDLE {
                 return i;
             }
         }
@@ -252,7 +252,7 @@ impl Scheduler {
         // flush the bundle if it's large enough
         if self.pb.get_rdo_set_size(bundle_id) > SET_MAX_SIZE
             || self.pb.get_rnw_set_size(bundle_id) > SET_MAX_SIZE
-            || target.len() >= MAX_TX_IN_BUNDLE
+            || target.len() >= MAX_TASKS_LEN_IN_BUNDLE
         {
             self.pb.clear(bundle_id);
             self.flush_bundle(bundle_id);
@@ -599,7 +599,7 @@ mod tests {
         // no large enough bundle to flush, so task fails
         assert_eq!(scheduler.fail_vec.len(), 1);
 
-        for i in 1..=MIN_TX_IN_BUNDLE {
+        for i in 1..=MIN_TASKS_IN_IN_BUNDLE {
             let mut tx = TxEnv::default();
             tx.access_list = vec![(WRITE_ACC, vec![U256::from(i)])];
             let tx_list: Vec<TxEnv> = vec![tx];
@@ -607,7 +607,7 @@ mod tests {
             scheduler.add_task(task);
         }
         assert_eq!(scheduler.pb.get_rdo_set_size(0), 0);
-        assert_eq!(scheduler.pb.get_rnw_set_size(0), MIN_TX_IN_BUNDLE + 1);
+        assert_eq!(scheduler.pb.get_rnw_set_size(0), MIN_TASKS_IN_IN_BUNDLE + 1);
         assert_eq!(scheduler.out_idx, 0);
 
         let mut tx = TxEnv::default();
@@ -620,12 +620,12 @@ mod tests {
         // flush_bundle:: if it's in the first bundle, blk_ctx run it immediately
         assert_eq!(scheduler.pb.get_rdo_set_size(0), 0);
         assert_eq!(scheduler.pb.get_rnw_set_size(0), 1);
-        assert_eq!(scheduler.out_idx, MIN_TX_IN_BUNDLE + 1);
+        assert_eq!(scheduler.out_idx, MIN_TASKS_IN_IN_BUNDLE + 1);
 
         // target.len() >= MAX_TX_IN_BUNDLE
         //flush the bundle if it's large enough
         // flush_bundle: after prepare_task, the task will be issued by Coordinator
-        for i in 1..MAX_TX_IN_BUNDLE {
+        for i in 1..MAX_TASKS_LEN_IN_BUNDLE {
             let mut tx = TxEnv::default();
             tx.access_list = vec![(READ_ACC, vec![U256::from(i)])];
             let tx_list: Vec<TxEnv> = vec![tx];
@@ -642,7 +642,7 @@ mod tests {
                 if received.my_idx <= 17 {
                     assert_eq!(
                         received.my_idx - received.min_all_done_index,
-                        MIN_TX_IN_BUNDLE as i32 + 1
+                        MIN_TASKS_IN_IN_BUNDLE as i32 + 1
                     );
                 } else {
                     assert_eq!(received.min_all_done_index, 0);

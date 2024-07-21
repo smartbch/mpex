@@ -4,7 +4,7 @@ use std::io::{self, BufRead};
 use std::path::Path;
 use serde::Deserialize;
 use exepipe::exetask::AccessSet;
-use exepipe::scheduler::{ParaBloom, BUNDLE_COUNT, MAX_TX_IN_BUNDLE, SET_MAX_SIZE};
+use exepipe::scheduler::{ParaBloom, BUNDLE_COUNT, MAX_TASKS_LEN_IN_BUNDLE, SET_MAX_SIZE};
 use mpads::utils::hasher;
 use byteorder::{BigEndian, ByteOrder};
 
@@ -73,7 +73,7 @@ impl Scheduler {
     pub fn new() -> Scheduler {
         let mut bundles = Vec::with_capacity(BUNDLE_COUNT);
         for _ in 0..BUNDLE_COUNT {
-            bundles.push(VecDeque::with_capacity(MAX_TX_IN_BUNDLE));
+            bundles.push(VecDeque::with_capacity(MAX_TASKS_LEN_IN_BUNDLE));
         }
         Scheduler {
             pb: ParaBloom::new(),
@@ -124,7 +124,7 @@ impl Scheduler {
         // flush the bundle if it's large enough
         if self.pb.get_rdo_set_size(bundle_id) > SET_MAX_SIZE
             || self.pb.get_rnw_set_size(bundle_id) > SET_MAX_SIZE
-            || target.len() >= MAX_TX_IN_BUNDLE
+            || target.len() >= MAX_TASKS_LEN_IN_BUNDLE
         {
             self.pb.clear(bundle_id);
             self.flush_bundle(bundle_id);
