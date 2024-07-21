@@ -11,7 +11,7 @@ use std::{error, io};
 #[derive(Debug)]
 pub struct HPFile {
     dir_name: String,
-    block_size: i64,
+    segment_size: i64,
     buffer_size: i64,
     file_map: RwLock<HashMap<i64, File>>,
     largest_id: AtomicI64,
@@ -19,21 +19,21 @@ pub struct HPFile {
 }
 
 impl HPFile {
-    pub fn new(buffer_size: i64, block_size: i64, dir_name: String) -> Result<HPFile> {
-        if block_size % buffer_size != 0 {
+    pub fn new(buffer_size: i64, segment_size: i64, dir_name: String) -> Result<HPFile> {
+        if segment_size % buffer_size != 0 {
             panic!(
-                "Invalid blockSize:{} bufferSize:{}",
-                block_size, buffer_size
+                "Invalid segmentSize:{} bufferSize:{}",
+                segment_size, buffer_size
             );
         };
 
-        let (id_list, largest_id) = Self::get_file_ids(&dir_name, block_size)?;
+        let (id_list, largest_id) = Self::get_file_ids(&dir_name, segment_size)?;
         let (file_map, latest_file_size) =
-            Self::load_file_map(&dir_name, block_size, id_list, largest_id)?;
+            Self::load_file_map(&dir_name, segment_size, id_list, largest_id)?;
 
         Ok(HPFile {
             dir_name: dir_name.clone(),
-            block_size,
+            segment_size: segment_size,
             buffer_size,
             file_map: RwLock::new(file_map),
             largest_id: AtomicI64::new(largest_id),
@@ -41,7 +41,7 @@ impl HPFile {
         })
     }
 
-    fn get_file_ids(dir_name: &str, block_size: i64) -> Result<(Vec<i64>, i64)> {
+    fn get_file_ids(dir_name: &str, segment_size: i64) -> Result<(Vec<i64>, i64)> {
         let mut largest_id = 0;
         let mut id_list: Vec<i64> = vec![];
 
@@ -52,7 +52,7 @@ impl HPFile {
                 continue;
             }
 
-            let id = Self::parse_filename(block_size, entry.file_name().to_str().unwrap())?;
+            let id = Self::parse_filename(segment_size, entry.file_name().to_str().unwrap())?;
             if largest_id < id {
                 largest_id = id;
             }
@@ -62,11 +62,11 @@ impl HPFile {
         Ok((id_list, largest_id))
     }
 
-    fn parse_filename(block_size: i64, file_name: &str) -> Result<i64> {
+    fn parse_filename(segment_size: i64, file_name: &str) -> Result<i64> {
         let two_parts: Vec<_> = file_name.split("-").collect();
         if two_parts.len() != 2 {
             return Err(anyhow!(
-                "{} does not match the pattern 'FileId-BlockSize'",
+                "{} does not match the pattern 'FileId-segmentSize'",
                 file_name
             )
             .into());
@@ -84,8 +84,8 @@ impl HPFile {
             Err(_) => return Err(anyhow!("Invalid Filename: {}", file_name).into()),
         };
 
-        if block_size != size {
-            return Err(anyhow!("Invalid Size! {}!={}", size, block_size).into());
+        if segment_size != size {
+            return Err(anyhow!("Invalid Size! {}!={}", size, segment_size).into());
         }
 
         Ok(id)
@@ -93,7 +93,7 @@ impl HPFile {
 
     fn load_file_map(
         dir_name: &str,
-        block_size: i64,
+        segment_size: i64,
         id_list: Vec<i64>,
         largest_id: i64,
     ) -> Result<(HashMap<i64, File>, i64)> {
@@ -101,7 +101,7 @@ impl HPFile {
         let mut latest_file_size: i64 = 0;
 
         for &id in &id_list {
-            let file_name = format!("{}/{}-{}", &dir_name, id, block_size);
+            let file_name = format!("{}/{}-{}", &dir_name, id, segment_size);
             let file = File::options().read(true).write(true).open(file_name)?;
             file_map.insert(id, file);
             if id == largest_id {
@@ -109,7 +109,7 @@ impl HPFile {
             }
         }
         if id_list.is_empty() {
-            let file_name = format!("{}/{}-{}", &dir_name, 0, block_size);
+            let file_name = format!("{}/{}-{}", &dir_name, 0, segment_size);
             let file = File::create_new(file_name)?;
             file_map.insert(0, file);
         };
@@ -118,25 +118,25 @@ impl HPFile {
     }
 
     pub fn size(&self) -> i64 {
-        self.largest_id.load(Ordering::SeqCst) * self.block_size
+        self.largest_id.load(Ordering::SeqCst) * self.segment_size
             + self.latest_file_size.load(Ordering::SeqCst)
     }
 
     pub fn truncate(&self, mut size: i64) -> Option<io::Error> {
         let mut file_map = self.file_map.write().unwrap();
         let mut largest_id = self.largest_id.load(Ordering::SeqCst);
-        while size < largest_id * self.block_size {
+        while size < largest_id * self.segment_size {
             let _ = file_map.remove(&largest_id)?;
-            let file_name = format!("{}/{}-{}", self.dir_name, largest_id, self.block_size);
+            let file_name = format!("{}/{}-{}", self.dir_name, largest_id, self.segment_size);
             if let Err(err) = remove_file(file_name) {
                 return Some(err);
             }
             self.largest_id.fetch_sub(1, Ordering::SeqCst);
             largest_id -= 1;
         }
-        size -= largest_id * self.block_size;
+        size -= largest_id * self.segment_size;
         let _ = file_map.remove(&largest_id);
-        let file_name = format!("{}/{}-{}", self.dir_name, largest_id, self.block_size);
+        let file_name = format!("{}/{}-{}", self.dir_name, largest_id, self.segment_size);
         let f = match File::options().read(true).write(true).open(file_name) {
             Ok(file) => file,
             Err(err) => return Some(err),
@@ -168,14 +168,14 @@ impl HPFile {
     }
 
     pub fn read_at(&self, buf: &mut [u8], off: i64) -> usize {
-        let file_id = off / self.block_size;
-        let pos = off % self.block_size;
+        let file_id = off / self.segment_size;
+        let pos = off % self.segment_size;
         let file_map = self.file_map.read().unwrap();
         let f = match file_map.get(&file_id) {
             None => {
                 panic!(
                     "Can not find the file with id={} ({}/{})",
-                    file_id, off, self.block_size
+                    file_id, off, self.segment_size
                 );
             }
             Some(file) => file,
@@ -194,8 +194,8 @@ impl HPFile {
         if buf.len() < num_bytes {
             buf.resize(num_bytes, 0);
         }
-        let file_id = off / self.block_size;
-        let pos = off % self.block_size;
+        let file_id = off / self.segment_size;
+        let pos = off % self.segment_size;
         if pre_reader.try_read(file_id, pos, &mut buf[0..num_bytes]) {
             return;
         }
@@ -204,12 +204,12 @@ impl HPFile {
             None => {
                 panic!(
                     "Can not find the file with id={} ({}/{})",
-                    file_id, off, self.block_size
+                    file_id, off, self.segment_size
                 );
             }
             Some(file) => file,
         };
-        if num_bytes >= PRE_READ_BUF_SIZE || pos + num_bytes as i64 > self.block_size {
+        if num_bytes >= PRE_READ_BUF_SIZE || pos + num_bytes as i64 > self.segment_size {
             if let Err(err) = f.read_at(buf, pos as u64) {
                 panic!("file read error: {}", err);
             };
@@ -258,12 +258,12 @@ impl HPFile {
             buffer.clear();
         }
         buffer.extend_from_slice(&bz[split_pos..]); //put remained bytes into buffer
-        let overflow_byte_count = old_size + bz.len() as i64 - self.block_size;
+        let overflow_byte_count = old_size + bz.len() as i64 - self.segment_size;
         if overflow_byte_count >= 0 {
             self.flush(buffer); // flush buffer's remained data out
             self.largest_id.fetch_add(1, Ordering::SeqCst);
             largest_id += 1;
-            let file_name = format!("{}/{}-{}", self.dir_name, largest_id, self.block_size);
+            let file_name = format!("{}/{}-{}", self.dir_name, largest_id, self.segment_size);
             let f = match File::create_new(&file_name) {
                 Ok(file) => file,
                 Err(_) => File::options()
@@ -285,7 +285,7 @@ impl HPFile {
     }
 
     pub fn prune_head(&self, off: i64) -> Option<Box<dyn error::Error>> {
-        let file_id = off / self.block_size;
+        let file_id = off / self.segment_size;
         let mut file_map = self.file_map.write().unwrap();
         let mut id_list = Vec::with_capacity(file_map.len());
         for (&id, _) in file_map.iter() {
@@ -296,7 +296,7 @@ impl HPFile {
         }
         for id in id_list {
             file_map.remove(&id);
-            let file_name = format!("{}/{}-{}", self.dir_name, id, self.block_size);
+            let file_name = format!("{}/{}-{}", self.dir_name, id, self.segment_size);
             match remove_file(file_name) {
                 Ok(_) => {}
                 Err(err) => return Some(err.into()),
@@ -395,10 +395,10 @@ mod hp_file_tests {
     fn hp_file_new() {
         let dir = TempDir::new("hpfile_test_dir_2");
         let buffer_size = 64;
-        let block_size = 128;
-        let mut hp = HPFile::new(buffer_size, block_size, dir.to_string()).unwrap();
+        let segment_size = 128;
+        let mut hp = HPFile::new(buffer_size, segment_size, dir.to_string()).unwrap();
         assert_eq!(hp.buffer_size, buffer_size);
-        assert_eq!(hp.block_size, block_size);
+        assert_eq!(hp.segment_size, segment_size);
         assert_eq!(hp.file_map.read().unwrap().len(), 1);
         assert_eq!(
             hp.file_map
@@ -498,12 +498,12 @@ mod hp_file_tests {
     }
 
     #[test]
-    #[should_panic(expected = "Invalid blockSize:127 bufferSize:64")]
-    fn test_new_file_invalid_buffer_or_block_size() {
-        let dir = TempDir::new("test_new_file_invalid_buffer_or_block_size");
+    #[should_panic(expected = "Invalid segmentSize:127 bufferSize:64")]
+    fn test_new_file_invalid_buffer_or_segment_size() {
+        let dir = TempDir::new("test_new_file_invalid_buffer_or_segment_size");
         let buffer_size = 64;
-        let block_size = 127;
-        let _ = HPFile::new(buffer_size, block_size, dir.to_string()).unwrap();
+        let segment_size = 127;
+        let _ = HPFile::new(buffer_size, segment_size, dir.to_string()).unwrap();
     }
 
     #[test]
@@ -511,7 +511,7 @@ mod hp_file_tests {
         let dir = TempDir::new("test_new_file_invalid_filename");
         dir.create_file("hello.txt"); // invalid filename
         assert_eq!(
-            "hello.txt does not match the pattern 'FileId-BlockSize'",
+            "hello.txt does not match the pattern 'FileId-segmentSize'",
             HPFile::new(64, 128, dir.to_string())
                 .unwrap_err()
                 .to_string()
@@ -558,8 +558,8 @@ mod hp_file_tests {
     fn test_read_at_with_pre_reader() {
         let dir = TempDir::new("hpfile_test_dir_4");
         let buffer_size = 64;
-        let block_size = 128;
-        let hp_file = HPFile::new(buffer_size, block_size, dir.to_string()).unwrap();
+        let segment_size = 128;
+        let hp_file = HPFile::new(buffer_size, segment_size, dir.to_string()).unwrap();
         let mut pre_reader = PreReader::new();
         pre_reader.end = 5;
         for i in 0..5 {
@@ -585,9 +585,9 @@ mod hp_file_tests {
     fn test_prune_head() {
         let dir = TempDir::new("hpfile_test_dir_5");
         let buffer_size = 64;
-        let block_size = 128;
-        let hp_file = HPFile::new(buffer_size, block_size, dir.to_string()).unwrap();
-        hp_file.prune_head(block_size * 2);
+        let segment_size = 128;
+        let hp_file = HPFile::new(buffer_size, segment_size, dir.to_string()).unwrap();
+        hp_file.prune_head(segment_size * 2);
         assert_eq!(fs::read_dir(dir.to_string()).unwrap().count(), 0);
     }
 
@@ -595,8 +595,8 @@ mod hp_file_tests {
     fn test_hpfile() {
         let dir = TempDir::new("hpfile_test_dir_6");
         let buffer_size = 64;
-        let block_size = 128;
-        let hp_file = HPFile::new(buffer_size, block_size, dir.to_string()).unwrap();
+        let segment_size = 128;
+        let hp_file = HPFile::new(buffer_size, segment_size, dir.to_string()).unwrap();
         let mut buffer = Vec::with_capacity(buffer_size as usize);
 
         for _i in 0..100 {

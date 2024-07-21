@@ -8,9 +8,9 @@ pub struct EntryFile {
 }
 
 impl EntryFile {
-    pub fn new(buffer_size: usize, block_size: i64, dir_name: String) -> EntryFile {
+    pub fn new(buffer_size: usize, segment_size: i64, dir_name: String) -> EntryFile {
         EntryFile {
-            hp_file: HPFile::new(buffer_size as i64, block_size, dir_name).unwrap(),
+            hp_file: HPFile::new(buffer_size as i64, segment_size, dir_name).unwrap(),
         }
     }
 

@@ -74,12 +74,16 @@ impl AdsCore {
         task_hub: Arc<dyn TaskHub>,
         dir: &str,
         wrbuf_size: usize,
-        file_block_size: usize,
+        file_segment_size: usize,
     ) -> (Self, Receiver<i64>, Flusher) {
         let data_dir = dir.to_owned() + "/data";
         let code_dir = format!("{}/{}{}", data_dir, CODE_PATH, "bc");
         let _ = fs::create_dir_all(&code_dir);
-        let code_file = Arc::new(EntryFile::new(wrbuf_size, file_block_size as i64, code_dir));
+        let code_file = Arc::new(EntryFile::new(
+            wrbuf_size,
+            file_segment_size as i64,
+            code_dir,
+        ));
         let code_idxr = CodeIndexer::new();
         Self::index_code(&code_file, &code_idxr);
         let code_shard = Some(Box::new(FlusherShardForCode::new(
@@ -101,7 +105,7 @@ impl AdsCore {
                 &meta,
                 data_dir.clone(),
                 wrbuf_size,
-                file_block_size,
+                file_segment_size,
                 curr_height,
                 shard_id,
             );
@@ -144,7 +148,7 @@ impl AdsCore {
         meta: &MetaDB,
         data_dir: String,
         buffer_size: usize,
-        file_block_size: usize,
+        file_segment_size: usize,
         curr_height: i64,
         shard_id: usize,
     ) -> (Tree, u64, u64) {
@@ -159,7 +163,7 @@ impl AdsCore {
         let (tree, recovered_root) = recover_tree(
             shard_id,
             buffer_size,
-            file_block_size,
+            file_segment_size,
             data_dir,
             format!("{}", shard_id),
             &edge_nodes,
@@ -195,7 +199,7 @@ impl AdsCore {
         });
     }
 
-    pub fn init_dir(dir: &str, file_block_size: usize) {
+    pub fn init_dir(dir: &str, file_segment_size: usize) {
         if Path::new(dir).exists() {
             fs::remove_dir_all(dir).unwrap();
         }
@@ -206,7 +210,7 @@ impl AdsCore {
             let mut tree = Tree::new(
                 shard_id,
                 8192,
-                file_block_size as i64,
+                file_segment_size as i64,
                 dir.to_owned() + "/data",
                 format!("{}", shard_id),
             );
@@ -405,10 +409,10 @@ pub struct SharedAdsWrap {
 }
 
 impl<T: Task + 'static> AdsWrap<T> {
-    pub fn new(dir: &str, wrbuf_size: usize, file_block_size: usize) -> Self {
+    pub fn new(dir: &str, wrbuf_size: usize, file_segment_size: usize) -> Self {
         let task_hub = Arc::new(BlockPairTaskHub::<T>::new());
         let (mut ads, end_block_chan, flusher) =
-            AdsCore::new(task_hub.clone(), dir, wrbuf_size, file_block_size);
+            AdsCore::new(task_hub.clone(), dir, wrbuf_size, file_segment_size);
         ads.start_threads(flusher);
 
         Self {

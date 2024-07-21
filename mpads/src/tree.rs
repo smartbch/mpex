@@ -437,7 +437,7 @@ impl Tree {
     pub fn new_blank(
         shard_id: usize,
         buffer_size: usize,
-        block_size: i64,
+        segment_size: i64,
         dir_name: String,
         suffix: String,
     ) -> Self {
@@ -445,8 +445,8 @@ impl Tree {
         let _ = fs::create_dir_all(&dir_entry);
         let dir_twig = format!("{}/{}{}", dir_name, TWIG_PATH, suffix);
         let _ = fs::create_dir_all(&dir_twig);
-        let twig_arc = Arc::new(TwigFile::new(buffer_size, block_size, dir_twig));
-        let ef_arc = Arc::new(EntryFile::new(buffer_size, block_size, dir_entry));
+        let twig_arc = Arc::new(TwigFile::new(buffer_size, segment_size, dir_twig));
+        let ef_arc = Arc::new(EntryFile::new(buffer_size, segment_size, dir_entry));
 
         Self {
             my_shard_id: shard_id,
@@ -467,11 +467,11 @@ impl Tree {
     pub fn new(
         shard_id: usize,
         buffer_size: usize,
-        block_size: i64,
+        segment_size: i64,
         dir_name: String,
         suffix: String,
     ) -> Self {
-        let mut tree = Self::new_blank(shard_id, buffer_size, block_size, dir_name, suffix);
+        let mut tree = Self::new_blank(shard_id, buffer_size, segment_size, dir_name, suffix);
 
         tree.new_twig_map.insert(0, twig::NULL_TWIG.clone());
         tree.upper_tree

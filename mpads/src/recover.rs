@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use byteorder::{ByteOrder, LittleEndian};
 
 use crate::{
@@ -176,7 +174,7 @@ impl Tree {
 pub fn recover_tree(
     shard_id: usize,
     buffer_size: usize,
-    block_size: usize,
+    segment_size: usize,
     dir_name: String,
     suffix: String,
     edge_nodes: &Vec<EdgeNode>,
@@ -185,7 +183,7 @@ pub fn recover_tree(
     youngest_twig_id: u64,
     file_sizes: &[i64],
 ) -> (Tree, [u8; 32]) {
-    let mut tree = Tree::new_blank(shard_id, buffer_size, block_size as i64, dir_name, suffix);
+    let mut tree = Tree::new_blank(shard_id, buffer_size, segment_size as i64, dir_name, suffix);
     tree.youngest_twig_id = youngest_twig_id;
 
     if file_sizes.len() == 2 {

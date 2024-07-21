@@ -35,9 +35,9 @@ pub struct TwigFile {
 }
 
 impl TwigFile {
-    pub fn new(buffer_size: usize, block_size: i64, dir_name: String) -> TwigFile {
+    pub fn new(buffer_size: usize, segment_size: i64, dir_name: String) -> TwigFile {
         TwigFile {
-            hp_file: HPFile::new(buffer_size as i64, block_size, dir_name).unwrap(),
+            hp_file: HPFile::new(buffer_size as i64, segment_size, dir_name).unwrap(),
         }
     }
 
