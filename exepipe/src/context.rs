@@ -57,7 +57,7 @@ impl<'a, T: ADS> Database for TxContext<'a, T> {
     }
 
     fn code_by_hash(&mut self, code_hash: FixedBytes<32>) -> Result<Bytecode> {
-        if code_hash == FixedBytes::<32>::ZERO || code_hash == KECCAK_EMPTY {
+        if is_empty_code_hash(&code_hash) {
             return Ok(Bytecode::new());
         }
         let bc = self.blk_ctx.code_by_hash(&code_hash);
@@ -449,10 +449,10 @@ fn warmup_tx<T: ADS>(tx: &TxEnv, ads: &T, bytecode_map: &Arc<CodeMap>) -> Result
         &bytecode_map,
         &mut buf,
     )?;
-    if found == 0 {
-        // caller must exist
-        return Err(anyhow!("Cannot find caller account {}", tx.caller));
-    }
+    // if found == 0 {
+    //     // caller must exist
+    //     return Err(anyhow!("Cannot find caller account {}", tx.caller));
+    // }
     if let TransactTo::Call(to_address) = tx.transact_to {
         warmup_acc(
             ads,
