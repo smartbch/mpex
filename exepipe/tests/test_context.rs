@@ -317,7 +317,7 @@ mod tests {
         // println!("block_ctx.results = {:?}", block_ctx.results);
 
         let r = block_ctx.results[0].read().unwrap();
-        let s = r.deref().as_ref().unwrap()[1].as_ref().unwrap_err();
+        let s = r.deref().as_ref().unwrap()[0].as_ref().unwrap_err();
         assert!(format!("{:?}", s).contains("Commit state change error: Slot 0x0000000000000000000000000000000000000CcC/0 is not in write set"));
 
         check_account_info(
