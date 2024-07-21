@@ -82,8 +82,11 @@ mod tests {
         let duration = start.elapsed();
         println!("Time elapsed: {:?}", duration);
 
-        let r = blk_ctx.results[blk_ctx.results.len() - 1].read().unwrap();
-        assert!(r.is_some());
+        let r = &blk_ctx.results[blk_ctx.results.len() - 2].read().unwrap();
+        let r1 = r.as_ref().unwrap();
+        let r2 = r1.get(r1.len() - 1).unwrap();
+        let r3 = &r2.as_ref().unwrap().result;
+        assert!(r3.is_success());
     }
 
     #[test]
@@ -125,8 +128,11 @@ mod tests {
         let duration = start.elapsed();
         println!("Time elapsed: {:?}", duration);
 
-        let r = blk_ctx.results[blk_ctx.results.len() - 1].read().unwrap();
-        assert!(r.is_some());
+        let r = &blk_ctx.results[blk_ctx.results.len() - 2].read().unwrap();
+        let r1 = r.as_ref().unwrap();
+        let r2 = r1.get(r1.len() - 1).unwrap();
+        let r3 = &r2.as_ref().unwrap().result;
+        assert!(r3.is_success());
     }
 
     #[test]
