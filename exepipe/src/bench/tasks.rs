@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use revm::primitives::{Address, U256};
 
-use crate::exetask::ExeTask;
+use crate::{exetask::ExeTask, scheduler::MIN_TX_IN_BUNDLE};
 
 use super::{address::create_caller_address, erc20::create_transfer_token_tx};
 
@@ -68,10 +68,10 @@ pub fn create_conflict_tasks(
         panic!("task_txs_len * tasks_len > max_addrs_len / 2 ");
     }
     let mut caller_start_index = 1 as usize;
-    let caller = create_caller_address(caller_start_index);
     let mut tasks = Vec::with_capacity(tasks_len);
     for _ in 0..tasks_len {
         let mut txs = Vec::with_capacity(txs_len_in_task);
+        let caller = create_caller_address(caller_start_index % (MIN_TX_IN_BUNDLE + 1) + 1);
         for _ in 0..txs_len_in_task {
             let tx = create_transfer_token_tx(
                 &caller,

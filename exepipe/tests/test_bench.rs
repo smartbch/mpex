@@ -78,10 +78,12 @@ mod tests {
         scheduler.add_tasks(tasks_in);
         scheduler.flush_all_bundle_tasks();
         let mut coordinator = coord_thread.join().unwrap();
+        coordinator.end_block();
         let duration = start.elapsed();
         println!("Time elapsed: {:?}", duration);
 
-        coordinator.end_block();
+        let r = blk_ctx.results[blk_ctx.results.len() - 1].read().unwrap();
+        assert!(r.is_some());
     }
 
     #[test]
@@ -119,10 +121,12 @@ mod tests {
         scheduler.add_tasks(tasks_in);
         scheduler.flush_all_bundle_tasks();
         let mut coordinator = coord_thread.join().unwrap();
+        coordinator.end_block();
         let duration = start.elapsed();
         println!("Time elapsed: {:?}", duration);
 
-        coordinator.end_block();
+        let r = blk_ctx.results[blk_ctx.results.len() - 1].read().unwrap();
+        assert!(r.is_some());
     }
 
     #[test]
@@ -164,6 +168,7 @@ mod tests {
             coordinator
         });
         scheduler.add_tasks(tasks_in);
+        let start = Instant::now();
         scheduler.flush_all_bundle_tasks();
         let mut coordinator = coord_thread.join().unwrap();
         coordinator.end_block();
