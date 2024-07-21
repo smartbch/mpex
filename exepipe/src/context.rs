@@ -164,7 +164,7 @@ impl<T: ADS> BlockContext<T> {
         let mut task_result: Vec<Result<ResultAndState>> = Vec::new();
         for index in 0..task.tx_list.len() {
             let (tx_result, mut change_set) = self.handle_transaction(&task, index);
-            task_result.extend(tx_result);
+            task_result.push(tx_result);
             change_set.sort();
             self.curr_state.apply_change(&change_set);
             change_sets.push(change_set);
@@ -179,7 +179,7 @@ impl<T: ADS> BlockContext<T> {
         &self,
         task: &ExeTask,
         index: usize,
-    ) -> (Vec<Result<ResultAndState>>, ChangeSet) {
+    ) -> (Result<ResultAndState>, ChangeSet) {
         let tx = &task.tx_list[index];
         let env = Box::new(Env {
             cfg: CfgEnv::default(),
@@ -187,14 +187,15 @@ impl<T: ADS> BlockContext<T> {
             tx: tx.clone(),
         });
         let coinbase_gas_price = get_gas_price(&env);
-        let mut tx_result: Vec<Result<ResultAndState>> = Vec::new();
         if index >= task.warmup_results.len() {
             panic!("Internal error! No warmup result for tx index{}", index);
         }
         if let Some(error) = &task.warmup_results[index] {
-            tx_result.push(Err(anyhow!("Tx {:?} warmup error: {:?}", index, error)));
             let change_set = self.handle_tx_execute_mpex_err(&tx, coinbase_gas_price);
-            return (tx_result, change_set);
+            return (
+                Err(anyhow!("Tx {:?} warmup error: {:?}", index, error)),
+                change_set,
+            );
         }
 
         // each tx has its own orig_acc_map
@@ -217,9 +218,10 @@ impl<T: ADS> BlockContext<T> {
             evm.transact()
         };
 
+        let mut tx_result: Result<ResultAndState>;
         match evm_result {
             Ok(res_and_state) => {
-                tx_result.push(Ok(res_and_state.clone()));
+                tx_result = Ok(res_and_state.clone());
 
                 let gas_used = res_and_state.result.gas_used();
                 let mut change_set = ChangeSet::new();
@@ -239,12 +241,12 @@ impl<T: ADS> BlockContext<T> {
                     }
                     Err(err) => {
                         // there has rw error
-                        tx_result.push(Err(anyhow!("Commit state change error: {:?}", err)));
+                        tx_result = Err(anyhow!("Commit state change error: {:?}", err));
                     }
                 }
             }
             Err(err) => {
-                tx_result.push(Err(anyhow!("EVM transact error: {:?}", err)));
+                tx_result = Err(anyhow!("EVM transact error: {:?}", err));
             }
         }
 
