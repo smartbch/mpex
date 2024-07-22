@@ -82,10 +82,7 @@ impl AtomicU256 {
             }
         }
         if limbs[3] != 0 {
-            let old3 = self.limbs[3].fetch_add(limbs[3], Ordering::SeqCst);
-            if old3.checked_add(limbs[3]).is_none() {
-                panic!("Add Overflow");
-            }
+            self.limbs[3].fetch_add(limbs[3], Ordering::SeqCst);
         }
     }
 }
@@ -146,19 +143,6 @@ mod tests {
             r.to_u256()
         );
         println!("{:?}", s.elapsed());
-    }
-
-    #[test]
-    #[should_panic(expected = "Add Overflow")]
-    fn test_atomicu256_panic() {
-        let a = AtomicU256::zero();
-        a.add(
-            &U256::from_str(
-                "115792089237316195423570985008687907853269984665640564039457584007913129639935",
-            )
-            .unwrap(),
-        );
-        a.add(&U256::from(1));
     }
 
     #[test]
