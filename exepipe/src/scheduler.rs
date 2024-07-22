@@ -1,7 +1,6 @@
 use crate::context;
 use crate::exetask::{AccessSet, ExeTask};
 use mpads::def::IN_BLOCK_IDX_BITS;
-use mpads::tasksmanager::TasksManager;
 use mpads::SharedAdsWrap;
 use num_traits::Num;
 use std::collections::VecDeque;
@@ -393,15 +392,12 @@ mod tests {
     use core::task;
     use serial_test::serial;
     use std::{
-        ops::Add,
         sync::{Mutex, RwLock},
         thread,
     };
 
-    use mpads::test_helper::TempDir;
-    use revm::primitives::{
-        address, alloy_primitives::U160, hex::FromHex, Address, BlockEnv, TransactTo, TxEnv, U256,
-    };
+    use mpads::{tasksmanager::TasksManager, test_helper::TempDir};
+    use revm::primitives::{alloy_primitives::U160, Address, BlockEnv, TransactTo, TxEnv, U256};
 
     use crate::{
         exetask::{READ_ACC, WRITE_ACC},

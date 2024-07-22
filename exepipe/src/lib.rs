@@ -14,7 +14,7 @@ use crate::coordinator::Coordinator;
 use crate::exetask::ExeTask;
 use crate::scheduler::Scheduler;
 use mpads::tasksmanager::TasksManager;
-use mpads::{AdsWrap, ADS};
+use mpads::AdsWrap;
 use revm::precompile::primitives::BlockEnv;
 use std::sync::mpsc;
 use std::sync::{Arc, RwLock};

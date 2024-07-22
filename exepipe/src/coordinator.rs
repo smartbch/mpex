@@ -1,8 +1,6 @@
 use crate::context;
 use crate::scheduler::{EarlyExeInfo, EARLY_EXE_WINDOW_SIZE};
-use anyhow::anyhow;
 use mpads::def::{IN_BLOCK_IDX_BITS, IN_BLOCK_IDX_MASK};
-use mpads::utils::hasher;
 use mpads::SharedAdsWrap;
 use std::collections::{HashMap, HashSet};
 use std::sync::mpsc;
@@ -137,7 +135,7 @@ mod tests {
     use std::sync::{Arc, RwLock};
 
     use mpads::{tasksmanager::TasksManager, test_helper::TempDir};
-    use revm::primitives::{bitvec::vec, BlockEnv, TxEnv};
+    use revm::primitives::{BlockEnv, TxEnv};
 
     use crate::{
         context::BlockContext, coordinator::Coordinator, exetask::ExeTask, scheduler::EarlyExeInfo,

@@ -89,14 +89,12 @@ impl AtomicU256 {
 
 #[cfg(test)]
 mod tests {
-    use std::ops::Sub;
     use std::str::FromStr;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::{Arc, Mutex, RwLock};
     use std::thread::{self, JoinHandle};
     use std::time::Instant;
 
-    use revm::primitives::bitvec::view::BitViewSized;
     use revm::primitives::U256;
 
     use crate::utils::AtomicU256;

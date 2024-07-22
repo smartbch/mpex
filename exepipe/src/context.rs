@@ -4,7 +4,7 @@ use crate::exetask::{
 };
 use crate::statecache::{CodeMap, StateCache};
 use crate::utils::{addr_to_u256, decode_account_info, is_empty_code_hash, AtomicU256};
-use anyhow::{anyhow, Error, Result};
+use anyhow::{anyhow, Result};
 use bincode;
 use mpads::changeset::ChangeSet;
 use mpads::def::{DEFAULT_ENTRY_SIZE, IN_BLOCK_IDX_MASK};
@@ -12,9 +12,9 @@ use mpads::entry::EntryBz;
 use mpads::tasksmanager::TasksManager;
 use mpads::utils::hasher;
 use mpads::ADS;
-use revm::db::{Database, EmptyDB};
-use revm::handler::register::{EvmHandler, HandleRegisterBox};
-use revm::handler::{mainnet, register};
+use revm::db::Database;
+use revm::handler::mainnet;
+use revm::handler::register::EvmHandler;
 use revm::interpreter::gas::ACCESS_LIST_STORAGE_KEY;
 use revm::precompile::primitives::{
     AccountInfo, BlockEnv, Bytecode, CfgEnv, Env, FixedBytes, U256,
@@ -22,13 +22,11 @@ use revm::precompile::primitives::{
 use revm::precompile::Address;
 use revm::primitives::{
     Account, Bytes, EVMError, ExecutionResult, HandlerCfg, InvalidTransaction, LatestSpec, Output,
-    ResultAndState, SpecId, SuccessReason, TransactTo, TxEnv, KECCAK_EMPTY,
+    ResultAndState, SpecId, SuccessReason, TransactTo, TxEnv,
 };
 use revm::{Evm, Handler};
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::mem;
-use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 
 // to support the execution of one transaction

@@ -6,9 +6,8 @@ use mpads::changeset::ChangeSet;
 use mpads::def::{CODE_SHARD_ID, OP_CREATE, OP_DELETE, OP_WRITE};
 use mpads::utils::hasher;
 use revm::precompile::primitives::{Account, Address, TxEnv, U256};
-use revm::primitives::{address, StorageSlot, TransactTo};
+use revm::primitives::{address, TransactTo};
 use std::collections::{HashMap, HashSet};
-use std::ops::ControlFlow;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
