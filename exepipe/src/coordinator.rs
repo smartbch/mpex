@@ -92,6 +92,11 @@ impl Coordinator {
     }
 
     pub fn run(&mut self) {
+        let task_len = self.blk_ctx.tasks_manager.tasks_len();
+        if task_len == 1 {
+            return;
+        }
+
         //polling for the tasks in block
         loop {
             self.read_from_scheduled_chan(); //non-blocking
@@ -105,7 +110,10 @@ impl Coordinator {
                     self.blk_ctx.send_to_ads(task_id);
                     let last_task_id = self.blk_ctx.tasks_manager.get_last_task_id();
                     // the last task is endblock task.
-                    if new_all_done == ((last_task_id & IN_BLOCK_IDX_MASK) - 1) as i32 {
+                    // or only has one task_in and endblock task
+                    if new_all_done == ((last_task_id & IN_BLOCK_IDX_MASK) - 1) as i32
+                        || task_len == 2
+                    {
                         self.all_done_index = new_all_done;
                         return; // the last task is done, exit 'run' function
                     }
@@ -270,6 +278,8 @@ mod tests {
             }
             tasks.push(task);
         }
+        tasks.push(RwLock::new(None)); // endblock task
+
         blk_ctx.start_new_block(
             Arc::new(TasksManager::new(tasks, tasks_len as i64)),
             BlockEnv::default(),

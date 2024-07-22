@@ -1,8 +1,8 @@
 extern crate core;
 
+pub mod bench;
 pub mod context;
 pub mod coordinator;
-pub mod bench;
 pub mod exetask;
 pub mod scheduler;
 pub mod statecache;
@@ -55,6 +55,7 @@ impl ExePipe {
 
     pub fn run_block(&mut self, tasks_in: Vec<ExeTask>, block_env: BlockEnv, height: i64) {
         // allocate entries that will be filled by the scheduler
+        // +1 for endblock task
         let task_list = (0..tasks_in.len() + 1).map(|_| RwLock::new(None)).collect();
 
         // adswrap and blk_ctx will share the same last_task_id
