@@ -97,7 +97,7 @@ impl AccessSet {
 pub struct ExeTask {
     pub tx_list: Vec<TxEnv>,
     pub access_set: AccessSet,
-    pub change_sets: Option<Arc<Vec<ChangeSet>>>,
+    change_sets: Option<Arc<Vec<ChangeSet>>>,
     task_out_start: AtomicUsize,
     min_all_done_index: AtomicUsize,
     tx_accessed_slots_counts: Vec<u64>,
@@ -186,6 +186,30 @@ impl ExeTask {
 
     pub fn get_tx_accessed_slots_count(&self, index: usize) -> u64 {
         self.tx_accessed_slots_counts[index]
+    }
+
+    //'a' task conflicts with 'b' task
+    pub fn conflicts(a: &ExeTask, b: &ExeTask) -> bool {
+        for &k64a in a.access_set.rdo_k64_vec.iter() {
+            for &k64b in b.access_set.rnw_k64_vec.iter() {
+                if k64a == k64b {
+                    return true;
+                }
+            }
+        }
+        for &k64a in a.access_set.rnw_k64_vec.iter() {
+            for &k64b in b.access_set.rdo_k64_vec.iter() {
+                if k64a == k64b {
+                    return true;
+                }
+            }
+            for &k64b in b.access_set.rnw_k64_vec.iter() {
+                if k64a == k64b {
+                    return true;
+                }
+            }
+        }
+        false
     }
 }
 

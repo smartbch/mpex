@@ -350,7 +350,7 @@ fn prepare_task_and_send_eei(
         let other_opt = blk_ctx.tasks_manager.task_for_read(early_idx);
         let other = other_opt.as_ref().unwrap();
         // stop loop when we find a conflicting peer
-        if task_conflicts(&task, other) {
+        if ExeTask::conflicts(&task, other) {
             min_all_done_index = early_idx;
             break;
         }
@@ -363,33 +363,8 @@ fn prepare_task_and_send_eei(
     scheduled_chan.send(eei).unwrap();
 }
 
-//'a' task conflicts with 'b' task
-fn task_conflicts(a: &ExeTask, b: &ExeTask) -> bool {
-    for &k64a in a.access_set.rdo_k64_vec.iter() {
-        for &k64b in b.access_set.rnw_k64_vec.iter() {
-            if k64a == k64b {
-                return true;
-            }
-        }
-    }
-    for &k64a in a.access_set.rnw_k64_vec.iter() {
-        for &k64b in b.access_set.rdo_k64_vec.iter() {
-            if k64a == k64b {
-                return true;
-            }
-        }
-        for &k64b in b.access_set.rnw_k64_vec.iter() {
-            if k64a == k64b {
-                return true;
-            }
-        }
-    }
-    false
-}
-
 #[cfg(test)]
 mod tests {
-    use core::task;
     use serial_test::serial;
     use std::{
         sync::{Mutex, RwLock},

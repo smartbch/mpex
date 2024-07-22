@@ -98,18 +98,19 @@ mod test_exe_pipe {
     use crate::exetask::test_exe_task::build_access_list;
     use crate::exetask::ExeTask;
     use crate::ExePipe;
-    use mpads::{AdsCore, AdsWrap};
+    use mpads::{test_helper::TempDir, AdsCore, AdsWrap};
     use revm::primitives::{BlockEnv, TxEnv, U256};
-    use std::fs::{create_dir_all, remove_dir_all};
 
     #[test]
     fn test_run_block() {
         let dir = "test_exe_pipe";
+        let _tmp_dir = TempDir::new(dir);
+
         let buffer_size = 8192;
-        let block_size = 8192;
-        create_dir_all(dir).unwrap();
-        AdsCore::init_dir(dir, block_size);
-        let ads_exe_task = AdsWrap::<ExeTask>::new(dir, buffer_size, block_size);
+        let segment_size = 8192;
+
+        AdsCore::init_dir(dir, segment_size);
+        let ads_exe_task = AdsWrap::<ExeTask>::new(dir, buffer_size, segment_size);
         let mut pipe = ExePipe::new(ads_exe_task);
 
         let mut tx = TxEnv::default();
@@ -118,10 +119,10 @@ mod test_exe_pipe {
         tx.access_list = access_list;
         let task = ExeTask::new(vec![tx]);
         let task_in = vec![task];
+
         let mut block_env = BlockEnv::default();
         block_env.number = U256::from(1);
 
         pipe.run_block(task_in, block_env.clone(), 1);
-        remove_dir_all(dir).unwrap();
     }
 }
