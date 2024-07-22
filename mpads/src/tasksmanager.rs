@@ -12,7 +12,7 @@ pub struct TasksManager<T: Task> {
 impl<T: Task> TasksManager<T> {
     pub fn default() -> Self {
         Self {
-            tasks: vec![],
+            tasks: vec![], // need include end_block task.
             last_task_id: AtomicI64::new(-1),
         }
     }
