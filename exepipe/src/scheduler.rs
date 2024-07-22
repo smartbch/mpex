@@ -3,12 +3,12 @@ use crate::exetask::{AccessSet, ExeTask};
 use mpads::def::IN_BLOCK_IDX_BITS;
 use mpads::tasksmanager::TasksManager;
 use mpads::SharedAdsWrap;
+use num_traits::Num;
 use std::collections::VecDeque;
 use std::mem;
 use std::sync::mpsc;
 use std::sync::Arc;
 use threadpool::ThreadPool;
-use num_traits::Num;
 
 pub const FUNC_COUNT: usize = 5; //hash function count for bloomfilter
 pub const BLOOM_BITS_SHIFT: u64 = 11; // 11*5 = 55 < 64
@@ -23,12 +23,12 @@ pub const EARLY_EXE_WINDOW_SIZE: usize = 128;
 pub type BlockContext = context::BlockContext<SharedAdsWrap>;
 
 pub trait PBElement:
-    Num +
-    std::marker::Copy +
-    std::ops::BitAnd<Output = Self> +
-    std::ops::BitOr<Output = Self> +
-    std::ops::Not<Output = Self> +
-    std::ops::Shl<usize, Output = Self>
+    Num
+    + std::marker::Copy
+    + std::ops::BitAnd<Output = Self>
+    + std::ops::BitOr<Output = Self>
+    + std::ops::Not<Output = Self>
+    + std::ops::Shl<usize, Output = Self>
 {
     const BITS: u32;
 }
@@ -235,12 +235,14 @@ impl Scheduler {
     }
 
     pub fn add_tasks(&mut self, tasks: Vec<ExeTask>) {
+        let mut task_len = tasks.len();
         for task in tasks {
-            self.add_task(task);
+            task_len -= 1;
+            self.add_task(task, task_len == 0);
         }
     }
 
-    fn add_task(&mut self, task: ExeTask) {
+    fn add_task(&mut self, task: ExeTask, is_last_task: bool) {
         let mask = self.pb.get_dep_mask(&task.access_set);
         let mut bundle_id = mask.trailing_ones() as usize;
         // if we cannot find a bundle to insert task because
@@ -263,6 +265,11 @@ impl Scheduler {
 
         let target = self.bundles.get_mut(bundle_id).unwrap();
         target.push_back(task);
+
+        // ensuring bundle still has tasks when execute flush_all_bundle_tasks
+        if is_last_task {
+            return;
+        }
 
         // flush the bundle if it's large enough
         if self.pb.get_rdo_set_size(bundle_id) > SET_MAX_SIZE
@@ -529,7 +536,7 @@ mod tests {
             tx.transact_to = TransactTo::create();
             let tx_list: Vec<TxEnv> = vec![tx];
             let task = ExeTask::new(tx_list);
-            scheduler.add_task(task);
+            scheduler.add_task(task, false);
         }
         assert_eq!(scheduler.bundles[0].len(), 1);
 
@@ -539,7 +546,7 @@ mod tests {
             tx.transact_to = TransactTo::create();
             let tx_list: Vec<TxEnv> = vec![tx];
             let task = ExeTask::new(tx_list);
-            scheduler.add_task(task);
+            scheduler.add_task(task, false);
         }
 
         assert_eq!(scheduler.bundles[0].len(), 2);
@@ -561,7 +568,7 @@ mod tests {
             tx.transact_to = TransactTo::create();
             let tx_list: Vec<TxEnv> = vec![tx];
             let task = ExeTask::new(tx_list);
-            scheduler.add_task(task);
+            scheduler.add_task(task, false);
         }
         assert_eq!(scheduler.bundles[0].len(), 1);
         assert_eq!(scheduler.bundles[1].len(), 0);
@@ -572,7 +579,7 @@ mod tests {
             tx.transact_to = TransactTo::create();
             let tx_list: Vec<TxEnv> = vec![tx];
             let task = ExeTask::new(tx_list);
-            scheduler.add_task(task);
+            scheduler.add_task(task, false);
         }
         assert_eq!(scheduler.bundles[0].len(), 1);
         assert_eq!(scheduler.bundles[1].len(), 1);
@@ -601,7 +608,7 @@ mod tests {
             tx.access_list = vec![(WRITE_ACC, vec![U256::ZERO])];
             let tx_list: Vec<TxEnv> = vec![tx];
             let task = ExeTask::new_for_test(tx_list);
-            scheduler.add_task(task);
+            scheduler.add_task(task, false);
         }
 
         assert_eq!(scheduler.bundles[63].len(), 1);
@@ -610,7 +617,7 @@ mod tests {
         tx.access_list = vec![(WRITE_ACC, vec![U256::ZERO])];
         let tx_list: Vec<TxEnv> = vec![tx];
         let task = ExeTask::new_for_test(tx_list);
-        scheduler.add_task(task);
+        scheduler.add_task(task, false);
         // no large enough bundle to flush, so task fails
         assert_eq!(scheduler.fail_vec.len(), 1);
 
@@ -619,10 +626,13 @@ mod tests {
             tx.access_list = vec![(WRITE_ACC, vec![U256::from(i)])];
             let tx_list: Vec<TxEnv> = vec![tx];
             let task = ExeTask::new_for_test(tx_list);
-            scheduler.add_task(task);
+            scheduler.add_task(task, false);
         }
         assert_eq!(scheduler.pb.get_rdo_set_size(0), 0);
-        assert_eq!(scheduler.pb.get_rnw_set_size(0), MIN_TASKS_LEN_IN_BUNDLE + 1);
+        assert_eq!(
+            scheduler.pb.get_rnw_set_size(0),
+            MIN_TASKS_LEN_IN_BUNDLE + 1
+        );
         assert_eq!(scheduler.out_idx, 0);
 
         let mut tx = TxEnv::default();
@@ -630,7 +640,7 @@ mod tests {
         let tx_list: Vec<TxEnv> = vec![tx];
         let task = ExeTask::new_for_test(tx_list);
         // flush a large enough bundle
-        scheduler.add_task(task);
+        scheduler.add_task(task, false);
         thread::sleep(std::time::Duration::from_secs(1));
         // flush_bundle:: if it's in the first bundle, blk_ctx run it immediately
         assert_eq!(scheduler.pb.get_rdo_set_size(0), 0);
@@ -645,7 +655,7 @@ mod tests {
             tx.access_list = vec![(READ_ACC, vec![U256::from(i)])];
             let tx_list: Vec<TxEnv> = vec![tx];
             let task = ExeTask::new_for_test(tx_list);
-            scheduler.add_task(task);
+            scheduler.add_task(task, false);
         }
         thread::sleep(std::time::Duration::from_secs(1));
 
@@ -705,7 +715,7 @@ mod tests {
         tx.transact_to = TransactTo::create();
         let tx_list: Vec<TxEnv> = vec![tx];
         let task = ExeTask::new(tx_list);
-        scheduler.add_task(task);
+        scheduler.add_task(task, false);
 
         scheduler.flush_all_bundle_tasks();
 
