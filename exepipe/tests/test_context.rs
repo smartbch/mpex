@@ -64,14 +64,9 @@ mod tests {
         for r in result0.deref().as_ref().unwrap() {
             assert!(r.as_ref().unwrap().result.is_success());
         }
-        check_account_info(
-            block_ctx.curr_state.clone(),
-            &from,
-            1_000_000_000_000_000_000u128,
-            2,
-        );
-        check_account_info(block_ctx.curr_state.clone(), &to_address, 2u128, 0);
-        check_account_info(block_ctx.curr_state.clone(), &coinbase, 84000u128, 0);
+        check_account_info(&block_ctx, &from, 1_000_000_000_000_000_000u128, 2);
+        check_account_info(&block_ctx, &to_address, 2u128, 0);
+        check_account_info(&block_ctx, &coinbase, 84000u128, 0);
     }
 
     #[test]
@@ -93,13 +88,8 @@ mod tests {
         for r in result0.deref().as_ref().unwrap() {
             assert!(r.as_ref().unwrap().result.is_success());
         }
-        check_account_info(
-            block_ctx.curr_state.clone(),
-            &from,
-            1_000_000_000_000_000_000u128,
-            2,
-        );
-        check_account_info(block_ctx.curr_state.clone(), &coinbase, 84002u128, 0);
+        check_account_info(&block_ctx, &from, 1_000_000_000_000_000_000u128, 2);
+        check_account_info(&block_ctx, &coinbase, 84002u128, 0);
     }
 
     #[test]
@@ -121,9 +111,9 @@ mod tests {
         let s = r.deref().as_ref().unwrap()[0].as_ref().unwrap_err();
         assert!(format!("{:?}", s).contains("EVM transact error: Transaction(LackOfFundForMaxFee"));
 
-        check_account_info(block_ctx.curr_state.clone(), &from, 0, 2);
-        check_account_info(block_ctx.curr_state.clone(), &to_address, 0, 0);
-        check_account_info(block_ctx.curr_state.clone(), &coinbase, init_balance, 0);
+        check_account_info(&block_ctx, &from, 0, 2);
+        check_account_info(&block_ctx, &to_address, 0, 0);
+        check_account_info(&block_ctx, &coinbase, init_balance, 0);
     }
 
     #[test]
@@ -145,9 +135,9 @@ mod tests {
         let s = r.deref().as_ref().unwrap()[0].as_ref().unwrap_err();
         assert!(format!("{:?}", s).contains("Tx 0 warmup error: Cannot find caller account"));
 
-        check_account_info(block_ctx.curr_state.clone(), &from, 0, 0);
-        check_account_info(block_ctx.curr_state.clone(), &to_address, 0, 0);
-        check_account_info(block_ctx.curr_state.clone(), &coinbase, 0, 0);
+        check_account_info(&block_ctx, &from, 0, 0);
+        check_account_info(&block_ctx, &to_address, 0, 0);
+        check_account_info(&block_ctx, &coinbase, 0, 0);
     }
 
     #[test]
@@ -170,9 +160,9 @@ mod tests {
         block_ctx.end_block();
 
         // println!("block_ctx.results = {:?}", block_ctx.results);
-        check_account_info(block_ctx.curr_state.clone(), &from, 1000000000000000002, 2);
-        check_account_info(block_ctx.curr_state.clone(), &to_address, 0, 0);
-        check_account_info(block_ctx.curr_state.clone(), &Address::ZERO, 84000, 0);
+        check_account_info(&block_ctx, &from, 1000000000000000002, 2);
+        check_account_info(&block_ctx, &to_address, 0, 0);
+        check_account_info(&block_ctx, &Address::ZERO, 84000, 0);
     }
 
     #[test]
@@ -208,14 +198,9 @@ mod tests {
         assert_eq!(U256::ZERO, counter_slot.previous_or_original_value);
         assert_eq!(U256::from(3), counter_slot.present_value);
 
-        check_account_info(
-            block_ctx.curr_state.clone(),
-            &eoa_addr,
-            999999999999908266,
-            1,
-        );
-        check_account_info(block_ctx.curr_state.clone(), &ca_addr, 0, 0);
-        check_account_info(block_ctx.curr_state.clone(), &Address::ZERO, 91734, 0);
+        check_account_info(&block_ctx, &eoa_addr, 999999999999908266, 1);
+        check_account_info(&block_ctx, &ca_addr, 0, 0);
+        check_account_info(&block_ctx, &Address::ZERO, 91734, 0);
     }
 
     #[test]
@@ -246,18 +231,8 @@ mod tests {
         assert!(format!("{:?}", s).contains("Tx 0 warmup error: Cannot find bytecode for 0x7807a83790a6c471b7da667f716ae2d628a3012619829c7d31b5c3257bf39ecc"));
 
         // println!("block_ctx.results = {:?}", block_ctx.results);
-        check_account_info(
-            block_ctx.curr_state.clone(),
-            &eoa_addr,
-            999999998000000000u128,
-            1,
-        );
-        check_account_info(
-            block_ctx.curr_state.clone(),
-            &Address::ZERO,
-            2_000_000_000u128,
-            0,
-        );
+        check_account_info(&block_ctx, &eoa_addr, 999999998000000000u128, 1);
+        check_account_info(&block_ctx, &Address::ZERO, 2_000_000_000u128, 0);
     }
 
     // read from a slot that is not in the access list
@@ -276,18 +251,8 @@ mod tests {
         let r = block_ctx.results[0].read().unwrap();
         let s = r.deref().as_ref().unwrap()[0].as_ref().unwrap_err();
         assert!(format!("{:?}", s).contains("EVM transact error: Database(Slot 0x0000000000000000000000000000000000000CcC/0 is not in access set"));
-        check_account_info(
-            block_ctx.curr_state.clone(),
-            &eoa_addr,
-            999999998000000000u128,
-            1,
-        );
-        check_account_info(
-            block_ctx.curr_state.clone(),
-            &coinbase,
-            2_000_000_000u128,
-            0,
-        );
+        check_account_info(&block_ctx, &eoa_addr, 999999998000000000u128, 1);
+        check_account_info(&block_ctx, &coinbase, 2_000_000_000u128, 0);
     }
 
     // write to a slot that is only read in the access list
@@ -320,24 +285,21 @@ mod tests {
         let s = r.deref().as_ref().unwrap()[0].as_ref().unwrap_err();
         assert!(format!("{:?}", s).contains("Commit state change error: Slot 0x0000000000000000000000000000000000000CcC/0 is not in write set"));
 
-        check_account_info(
-            block_ctx.curr_state.clone(),
-            &eoa_addr,
-            999999998000000000u128,
-            1,
-        );
-        check_account_info(
-            block_ctx.curr_state.clone(),
-            &coinbase,
-            2_000_000_000u128,
-            0,
-        );
+        check_account_info(&block_ctx, &eoa_addr, 999999998000000000u128, 1);
+        check_account_info(&block_ctx, &coinbase, 2_000_000_000u128, 0);
     }
 }
 
-fn check_account_info(state: Arc<StateCache>, eoa_addr: &Address, balance: u128, nonce: u64) {
+fn check_account_info(
+    block_ctx: &BlockContext<MockADS>,
+    eoa_addr: &Address,
+    balance: u128,
+    nonce: u64,
+) {
     let mut buf = [0u8; ACC_INFO_LEN];
-    state.lookup_data(&hasher::hash(eoa_addr.to_vec().as_slice()), &mut buf);
+    block_ctx
+        .curr_state
+        .lookup_data(&hasher::hash(eoa_addr.to_vec().as_slice()), &mut buf);
     let acc = decode_account_info(&buf);
     assert_eq!(acc.balance, U256::from(balance));
     assert_eq!(acc.nonce, nonce);
