@@ -101,7 +101,7 @@ pub struct ExeTask {
     task_out_start: AtomicUsize,
     min_all_done_index: AtomicUsize,
     tx_accessed_slots_counts: Vec<u64>,
-    pub warmup_results: Vec<Option<Error>>,
+    warmup_results: Vec<Option<Error>>,
 }
 
 impl Task for ExeTask {
@@ -146,6 +146,17 @@ impl ExeTask {
             min_all_done_index: AtomicUsize::new(usize::MAX),
             tx_accessed_slots_counts,
         }
+    }
+
+    pub fn set_warmup_results(&mut self, results: Vec<Option<Error>>) {
+        self.warmup_results = results;
+    }
+
+    pub fn get_warmup_result(&self, index: usize) -> Option<&Error> {
+        if index >= self.warmup_results.len() {
+            panic!("Internal error! No warmup result for tx index{}", index);
+        }
+        self.warmup_results[index].as_ref()
     }
 
     pub fn set_change_sets(&mut self, change_sets: Arc<Vec<ChangeSet>>) {

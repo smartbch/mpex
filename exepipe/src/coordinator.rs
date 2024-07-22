@@ -228,7 +228,7 @@ mod tests {
             {
                 let mut task_opt = task.write().unwrap();
                 let _task = task_opt.as_mut().unwrap();
-                _task.warmup_results = vec![Option::None];
+                _task.set_warmup_results(vec![Option::None]);
             }
             tasks.push(task);
         }
@@ -270,7 +270,7 @@ mod tests {
             {
                 let mut task_opt = task.write().unwrap();
                 let _task = task_opt.as_mut().unwrap();
-                _task.warmup_results = vec![Option::None];
+                _task.set_warmup_results(vec![Option::None]);
             }
             tasks.push(task);
         }

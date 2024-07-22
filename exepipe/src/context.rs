@@ -143,10 +143,13 @@ impl<T: ADS> BlockContext<T> {
         }
         let mut task_opt = self.tasks_manager.task_for_write(idx);
         let task = task_opt.as_mut().unwrap();
-        for tx in &task.tx_list {
-            task.warmup_results
-                .push(warmup_tx(&tx, &self.ads, &self.curr_state.bytecode_map).err());
-        }
+        task.set_warmup_results(
+            task.tx_list
+                .iter()
+                .map(|tx| warmup_tx(tx, &self.ads, &self.curr_state.bytecode_map).err())
+                .collect(),
+        );
+
         // rewrite access_list for adapting revm
         task.rewrite_txs_access_list();
     }
@@ -185,10 +188,7 @@ impl<T: ADS> BlockContext<T> {
             tx: tx.clone(),
         });
         let coinbase_gas_price = get_gas_price(&env);
-        if index >= task.warmup_results.len() {
-            panic!("Internal error! No warmup result for tx index{}", index);
-        }
-        if let Some(error) = &task.warmup_results[index] {
+        if let Some(error) = &task.get_warmup_result(index) {
             let change_set = self.handle_tx_execute_mpex_err(&tx, coinbase_gas_price);
             return (
                 Err(anyhow!("Tx {:?} warmup error: {:?}", index, error)),
