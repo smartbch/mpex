@@ -390,6 +390,7 @@ fn task_conflicts(a: &ExeTask, b: &ExeTask) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use core::task;
     use serial_test::serial;
     use std::{
         ops::Add,
@@ -694,7 +695,7 @@ mod tests {
 
     #[test]
     #[serial]
-    fn test_end_block() {
+    fn test_flush_all_bundle_tasks() {
         let dir = "./tmp_ads";
         let _tmp_dir = TempDir::new(dir);
         let (shared_ads_wrap, tpool, sender, _receiver, s, r) = generate_ads_wrap(dir);
@@ -727,5 +728,38 @@ mod tests {
             (1 << IN_BLOCK_IDX_BITS) + 100 - 1
         );
         assert_eq!(scheduler.out_idx, 1);
+    }
+
+    #[test]
+    fn test_add_tasks() {
+        let dir = "./tmp_ads";
+        let _tmp_dir = TempDir::new(dir);
+        let (shared_ads_wrap, tpool, sender, _receiver, s, r) = generate_ads_wrap(dir);
+
+        let mut blk_ctx = BlockContext::new(shared_ads_wrap);
+        let tasks = (0..100).map(|_| RwLock::new(None)).collect::<Vec<_>>();
+        blk_ctx.start_new_block(
+            Arc::new(TasksManager::new(tasks, i64::MAX)),
+            BlockEnv::default(),
+        );
+
+        let blk_ctx = Arc::new(blk_ctx);
+        let mut scheduler = Scheduler::new(tpool, sender, blk_ctx.clone(), s);
+        scheduler.start_new_block(1, blk_ctx);
+
+        let tx = TxEnv::default();
+        let tx_list: Vec<TxEnv> = vec![tx];
+        let task = ExeTask::new(tx_list);
+        let task_in = vec![task];
+        scheduler.add_tasks(task_in);
+
+        // ensuring bundle still has tasks when execute flush_all_bundle_tasks
+        let bundle = &scheduler.bundles[0];
+        assert_eq!(bundle.len(), 1);
+
+        scheduler.flush_all_bundle_tasks();
+
+        let bundle = &scheduler.bundles[0];
+        assert_eq!(bundle.len(), 0);
     }
 }
