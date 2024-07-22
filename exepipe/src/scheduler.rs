@@ -16,7 +16,7 @@ pub const BLOOM_BITS: u64 = 1 << BLOOM_BITS_SHIFT; //bit count in one bloomfilte
 pub const BLOOM_BITS_MASK: u64 = BLOOM_BITS - 1;
 pub const SET_MAX_SIZE: usize = BLOOM_BITS as usize / 8;
 pub const MAX_TASKS_LEN_IN_BUNDLE: usize = 64;
-pub const MIN_TASKS_IN_IN_BUNDLE: usize = 8;
+pub const MIN_TASKS_LEN_IN_BUNDLE: usize = 8;
 pub const BUNDLE_COUNT: usize = 64;
 pub const EARLY_EXE_WINDOW_SIZE: usize = 128;
 
@@ -29,31 +29,46 @@ pub trait PBElement:
     std::ops::BitOr<Output = Self> +
     std::ops::Not<Output = Self> +
     std::ops::Shl<usize, Output = Self>
-{}
+{
+    const BITS: u32;
+}
 
-impl PBElement for u16 {}
-impl PBElement for u32 {}
-impl PBElement for u64 {}
-impl PBElement for u128 {}
+impl PBElement for u16 {
+    const BITS: u32 = u16::BITS;
+}
+impl PBElement for u32 {
+    const BITS: u32 = u32::BITS;
+}
+impl PBElement for u64 {
+    const BITS: u32 = u64::BITS;
+}
+impl PBElement for u128 {
+    const BITS: u32 = u128::BITS;
+}
 
 // 64 BloomFilters in parallel
 pub struct ParaBloom<T: PBElement> {
     rdo_arr: [T; BLOOM_BITS as usize],
     rnw_arr: [T; BLOOM_BITS as usize],
-    rdo_set_size: [usize; BUNDLE_COUNT],
-    rnw_set_size: [usize; BUNDLE_COUNT],
+    rdo_set_size: Vec<usize>,
+    rnw_set_size: Vec<usize>,
 }
 
 type ParaBloom64 = ParaBloom<u64>;
 
 impl<T: PBElement> ParaBloom<T> {
     pub fn new() -> ParaBloom<T> {
-        ParaBloom::<T> {
+        let mut res = ParaBloom::<T> {
             rdo_arr: [T::zero(); BLOOM_BITS as usize],
             rnw_arr: [T::zero(); BLOOM_BITS as usize],
-            rdo_set_size: [0usize; BUNDLE_COUNT],
-            rnw_set_size: [0usize; BUNDLE_COUNT],
+            rdo_set_size: Vec::with_capacity(T::BITS as usize),
+            rnw_set_size: Vec::with_capacity(T::BITS as usize),
+        };
+        for _ in 0..T::BITS {
+            res.rdo_set_size.push(0);
+            res.rnw_set_size.push(0);
         }
+        res
     }
 
     fn get_rdo_mask(&self, mut k64: u64) -> T {
@@ -119,7 +134,7 @@ impl<T: PBElement> ParaBloom<T> {
             self.rdo_arr[idx] = T::zero();
             self.rnw_arr[idx] = T::zero();
         }
-        for id in 0..BUNDLE_COUNT {
+        for id in 0..(T::BITS as usize) {
             self.rdo_set_size[id] = 0;
             self.rnw_set_size[id] = 0;
         }
@@ -212,7 +227,7 @@ impl Scheduler {
 
     pub fn first_can_flush_bundle(&self) -> usize {
         for i in 0..BUNDLE_COUNT {
-            if self.bundles[i].len() > MIN_TASKS_IN_IN_BUNDLE {
+            if self.bundles[i].len() > MIN_TASKS_LEN_IN_BUNDLE {
                 return i;
             }
         }
@@ -599,7 +614,7 @@ mod tests {
         // no large enough bundle to flush, so task fails
         assert_eq!(scheduler.fail_vec.len(), 1);
 
-        for i in 1..=MIN_TASKS_IN_IN_BUNDLE {
+        for i in 1..=MIN_TASKS_LEN_IN_BUNDLE {
             let mut tx = TxEnv::default();
             tx.access_list = vec![(WRITE_ACC, vec![U256::from(i)])];
             let tx_list: Vec<TxEnv> = vec![tx];
@@ -607,7 +622,7 @@ mod tests {
             scheduler.add_task(task);
         }
         assert_eq!(scheduler.pb.get_rdo_set_size(0), 0);
-        assert_eq!(scheduler.pb.get_rnw_set_size(0), MIN_TASKS_IN_IN_BUNDLE + 1);
+        assert_eq!(scheduler.pb.get_rnw_set_size(0), MIN_TASKS_LEN_IN_BUNDLE + 1);
         assert_eq!(scheduler.out_idx, 0);
 
         let mut tx = TxEnv::default();
@@ -620,9 +635,9 @@ mod tests {
         // flush_bundle:: if it's in the first bundle, blk_ctx run it immediately
         assert_eq!(scheduler.pb.get_rdo_set_size(0), 0);
         assert_eq!(scheduler.pb.get_rnw_set_size(0), 1);
-        assert_eq!(scheduler.out_idx, MIN_TASKS_IN_IN_BUNDLE + 1);
+        assert_eq!(scheduler.out_idx, MIN_TASKS_LEN_IN_BUNDLE + 1);
 
-        // target.len() >= MAX_TX_IN_BUNDLE
+        // target.len() >= MAX_TASKS_LEN_IN_BUNDLE
         //flush the bundle if it's large enough
         // flush_bundle: after prepare_task, the task will be issued by Coordinator
         for i in 1..MAX_TASKS_LEN_IN_BUNDLE {
@@ -642,7 +657,7 @@ mod tests {
                 if received.my_idx <= 17 {
                     assert_eq!(
                         received.my_idx - received.min_all_done_index,
-                        MIN_TASKS_IN_IN_BUNDLE as i32 + 1
+                        MIN_TASKS_LEN_IN_BUNDLE as i32 + 1
                     );
                 } else {
                     assert_eq!(received.min_all_done_index, 0);
