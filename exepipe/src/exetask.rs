@@ -207,15 +207,14 @@ pub fn get_change_set_and_check_access_rw(
             continue; // no change, so ignore
         }
         if account.is_empty() && account.is_loaded_as_not_existing() {
-            continue; // no need to write empty or new created account
+            continue; // no need to write not_existing and empty account
         }
-        let mut save_acc = false;
         if account.is_created() && !account.is_selfdestructed() {
             let bytecode = account.info.code.as_ref().unwrap();
             let v = bincode::serialize(bytecode).unwrap();
             buf32[..].copy_from_slice(&account.info.code_hash[..]);
             change_set.add_op(
-                OP_WRITE,
+                OP_CREATE,
                 CODE_SHARD_ID as u8,
                 &buf32,                      //used as key_hash during sort
                 &account.info.code_hash[..], //the key
@@ -225,28 +224,30 @@ pub fn get_change_set_and_check_access_rw(
             // bytecode is updated even when commit_state_change returns Error
             // it's safe because bytecode shard is not part of consensus
             state_cache.insert_code(&account.info.code_hash, bytecode);
-            save_acc = true;
         }
+
         let balance_b32: [u8; 32] = account.info.balance.to_be_bytes();
         acc_buf[0..32].copy_from_slice(&balance_b32);
         BigEndian::write_u64(&mut acc_buf[32..40], account.info.nonce);
         acc_buf[40..].copy_from_slice(&account.info.code_hash[..]);
         let orig_data = orig_acc_map.get(address);
+
+        let mut op_type_opt = Option::<u8>::None;
         if orig_data.is_none() {
-            save_acc = true; //new account
+            op_type_opt = Some(OP_CREATE);
         } else {
             let orig_data = orig_data.unwrap();
             if *orig_data != acc_buf {
-                save_acc = true; //changed account
+                op_type_opt = Some(OP_WRITE); //changed account
             }
         }
-        if save_acc {
+        if let Some(op_type) = op_type_opt {
             buf32 = hasher::hash(address);
             if check_access && access_set.rnw_set.get(&buf32).is_none() {
                 return Err(anyhow!("Account {} is not in write set", address));
             }
             change_set.add_op(
-                OP_WRITE,
+                op_type,
                 buf32[0] >> 4,
                 &buf32,       //used during sort as key_hash
                 &address[..], //the key
