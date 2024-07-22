@@ -311,4 +311,30 @@ mod tests {
             assert_eq!(_coordinator.all_done_index, 1);
         }
     }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_run_when_zero_task_in() {
+        let dir = "./tmp_ads";
+        let _tmp_dir = TempDir::new(dir);
+        let (shared_ads_wrap, tpool, sender, receivers, s, r) = generate_ads_wrap(dir);
+        let mut blk_ctx = BlockContext::new(shared_ads_wrap);
+
+        blk_ctx.start_new_block(
+            Arc::new(TasksManager::new(vec![RwLock::new(None)], i64::MAX)),
+            BlockEnv::default(),
+        );
+        let mut coordinator = Box::new(Coordinator::new(
+            receivers,
+            tpool.clone(),
+            Arc::new(blk_ctx),
+            s,
+            r,
+        ));
+        let handle = std::thread::spawn(move || {
+            coordinator.run();
+        });
+
+        handle.join().unwrap();
+    }
 }
