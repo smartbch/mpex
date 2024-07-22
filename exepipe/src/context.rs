@@ -3,7 +3,7 @@ use crate::exetask::{
     READ_SLOT, WRITE_ACC, WRITE_SLOT,
 };
 use crate::statecache::{CodeMap, StateCache};
-use crate::utils::{addr_to_u256, decode_account_info, is_empty_code_hash};
+use crate::utils::{addr_to_u256, decode_account_info, is_empty_code_hash, AtomicU256};
 use anyhow::{anyhow, Error, Result};
 use bincode;
 use mpads::changeset::ChangeSet;
@@ -99,7 +99,7 @@ pub struct BlockContext<T: ADS> {
     ads: T,
     block_env: BlockEnv,
     pub results: Vec<RwLock<Option<Vec<Result<ResultAndState>>>>>,
-    gas_fee_collect: Arc<RwLock<U256>>, // TODO use AtomicUsize
+    gas_fee_collect: AtomicU256,
 }
 
 impl<T: ADS> BlockContext<T> {
@@ -111,7 +111,7 @@ impl<T: ADS> BlockContext<T> {
             ads,
             block_env: BlockEnv::default(),
             results: Vec::new(),
-            gas_fee_collect: Arc::new(RwLock::new(U256::ZERO)),
+            gas_fee_collect: AtomicU256::zero(),
         }
     }
 
@@ -128,6 +128,7 @@ impl<T: ADS> BlockContext<T> {
         self.results = (0..self.tasks_manager.tasks_len())
             .map(|_| RwLock::new(Option::None))
             .collect();
+        self.gas_fee_collect = AtomicU256::zero();
     }
 
     pub fn warmup(&self, idx: usize) {
@@ -153,8 +154,7 @@ impl<T: ADS> BlockContext<T> {
     }
 
     fn collect_gas_fee(&self, gas_fee_delta: U256) {
-        let mut gas_fee = self.gas_fee_collect.write().unwrap();
-        *gas_fee = (*gas_fee).saturating_add(gas_fee_delta.clone());
+        self.gas_fee_collect.add(&gas_fee_delta);
     }
 
     pub fn execute(&self, idx: usize) {
@@ -319,8 +319,7 @@ impl<T: ADS> BlockContext<T> {
         let key_hash = hasher::hash(&coinbase);
         let mut orig_acc_map = HashMap::<Address, AccInfo>::new();
         let acc_info_opt = self.basic(&key_hash, &coinbase, &mut orig_acc_map);
-        let mut gas_fee_collected_guard = self.gas_fee_collect.write().unwrap();
-        let gas_fee_collected = *gas_fee_collected_guard;
+        let gas_fee_collected = self.gas_fee_collect.to_u256();
         let mut task_result: Vec<Result<ResultAndState>> = Vec::new();
         let mut acc_info;
         if acc_info_opt.is_some() {
@@ -369,8 +368,6 @@ impl<T: ADS> BlockContext<T> {
         *result_opt = Option::Some(task_result);
 
         self.send_to_ads(end_block_task_id);
-        // clear gas fee
-        *gas_fee_collected_guard = U256::ZERO;
     }
 
     fn basic(
@@ -449,10 +446,10 @@ fn warmup_tx<T: ADS>(tx: &TxEnv, ads: &T, bytecode_map: &Arc<CodeMap>) -> Result
         &bytecode_map,
         &mut buf,
     )?;
-    // if found == 0 {
-    //     // caller must exist
-    //     return Err(anyhow!("Cannot find caller account {}", tx.caller));
-    // }
+    if found == 0 {
+        // caller must exist
+        return Err(anyhow!("Cannot find caller account {}", tx.caller));
+    }
     if let TransactTo::Call(to_address) = tx.transact_to {
         warmup_acc(
             ads,

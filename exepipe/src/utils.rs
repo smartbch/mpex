@@ -21,7 +21,7 @@ pub fn is_empty_code_hash(code_hash: &FixedBytes<32>) -> bool {
     code_hash == &FixedBytes::<32>::ZERO || code_hash == &KECCAK_EMPTY
 }
 
-struct AtomicU256 {
+pub struct AtomicU256 {
     limbs: [AtomicU64; 4],
 }
 
