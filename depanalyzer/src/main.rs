@@ -1,34 +1,34 @@
+use byteorder::{BigEndian, ByteOrder};
+use exepipe::exetask::AccessSet;
+use exepipe::scheduler::{PBElement, ParaBloom, MAX_TASKS_LEN_IN_BUNDLE, SET_MAX_SIZE};
+use mpads::utils::hasher;
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
+use std::io::{self, BufRead};
+use std::path::Path;
 use std::{
     fs::{File, OpenOptions},
     io::{Read, Write},
 };
-use std::io::{self, BufRead};
-use std::path::Path;
-use serde::Deserialize;
-use exepipe::exetask::AccessSet;
-use exepipe::scheduler::{PBElement, ParaBloom, MAX_TASKS_LEN_IN_BUNDLE, SET_MAX_SIZE};
-use mpads::utils::hasher;
-use byteorder::{BigEndian, ByteOrder};
 
-const WETH_ADDR: &str = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
+pub const WETH_ADDR: &str = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
 //const WETH_ADDR: &str = "";
 
 #[derive(Deserialize, Debug, Clone)]
-struct Slot {
-    addr: String,
-    index: String,
+pub struct Slot {
+    pub addr: String,
+    pub index: String,
 }
 
 #[derive(Deserialize, Debug, Clone)]
-struct Tx {
-    txid: String,
-    rdo_addr_list: Vec<String>,
-    rnw_addr_list: Vec<String>,
-    rdo_slot_list: Vec<Slot>,
-    rnw_slot_list: Vec<Slot>,
+pub struct Tx {
+    pub txid: String,
+    pub rdo_addr_list: Vec<String>,
+    pub rnw_addr_list: Vec<String>,
+    pub rdo_slot_list: Vec<Slot>,
+    pub rnw_slot_list: Vec<Slot>,
 }
 
 impl Tx {
@@ -52,12 +52,12 @@ impl Tx {
         }
         let mut buf = [0u8; 52];
         for rdo_slot in self.rdo_slot_list.iter() {
-            let hash = hasher::hash("".to_owned()+&rdo_slot.addr+&rdo_slot.index);
+            let hash = hasher::hash("".to_owned() + &rdo_slot.addr + &rdo_slot.index);
             access_set.rdo_k64_vec.push(BigEndian::read_u64(&hash[..8]));
             access_set.rdo_set.insert(hash);
         }
         for rnw_slot in self.rnw_slot_list.iter() {
-            let hash = hasher::hash("".to_owned()+&rnw_slot.addr+&rnw_slot.index);
+            let hash = hasher::hash("".to_owned() + &rnw_slot.addr + &rnw_slot.index);
             access_set.rnw_k64_vec.push(BigEndian::read_u64(&hash[..8]));
             access_set.rnw_set.insert(hash);
         }
@@ -66,10 +66,10 @@ impl Tx {
 }
 
 #[derive(Deserialize, Debug)]
-struct Block {
-    height: i64,
-    tx_list: Vec<Tx>,
-    coinbase: String,
+pub struct Block {
+    pub height: i64,
+    pub tx_list: Vec<Tx>,
+    pub coinbase: String,
 }
 
 #[derive(Deserialize, Debug)]
@@ -107,7 +107,6 @@ impl<T: PBElement> AccessSetList<T> {
         return self.rnw_set_list[id].len();
     }
 
-
     //pub rdo_set: HashSet<[u8; 32]>,
     //pub rnw_set: HashSet<[u8; 32]>,
 
@@ -144,7 +143,6 @@ impl<T: PBElement> AccessSetList<T> {
             self.rnw_set_list[idx].clear();
         }
     }
-
 
     pub fn add(&mut self, idx: usize, access_set: &AccessSet) {
         for &hash in access_set.rdo_set.iter() {
@@ -243,12 +241,12 @@ impl Scheduler {
 
     fn flush_bundle(&mut self, bundle_id: usize) {
         let target = self.bundles.get_mut(bundle_id).unwrap();
-        println!("AA BeginBundle size={}", target.len()); 
+        println!("AA BeginBundle size={}", target.len());
         while target.len() != 0 {
             let (txid, _access_set) = target.pop_front().unwrap();
             println!("{:?}", txid);
         }
-        println!("EndBundle"); 
+        println!("EndBundle");
     }
 
     fn add_tx(&mut self, tx: &Tx, coinbase: &str, total_bundle: &mut usize) {
@@ -286,7 +284,7 @@ impl Scheduler {
 struct SerialIssuer {
     bundle_set: AccessSet,
     bundle_size: usize,
-    only_rnw: bool
+    only_rnw: bool,
 }
 
 impl SerialIssuer {
@@ -311,7 +309,6 @@ impl SerialIssuer {
             self.bundle_size += 1;
         }
     }
-
 }
 
 fn count_addr(blocks: &Vec<Block>) {
@@ -334,7 +331,9 @@ fn count_addr(blocks: &Vec<Block>) {
 }
 
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
-where P: AsRef<Path>, {
+where
+    P: AsRef<Path>,
+{
     let file = File::open(filename)?;
     Ok(io::BufReader::new(file).lines())
 }
@@ -344,18 +343,21 @@ fn main() {
     //run_serial_issuer();
 }
 
-fn run_serial_issuer() {
+pub fn run_serial_issuer() -> (usize, usize) {
     let mut serial_issuer = SerialIssuer::new(false);
     let mut total_tx = 0;
     let mut total_bundle = 0;
     for id in (20338810..20338850).step_by(10) {
         let mut file = OpenOptions::new()
             .read(true)
-            .open(format!("blocks/blocks_{}.json", id))
+            .open(format!(
+                "blocks/blocks_{}.json",
+                id
+            ))
             .expect("Could not read file");
         let mut contents = String::new();
         file.read_to_string(&mut contents).unwrap();
-        
+
         let blocks: Vec<Block> = serde_json::from_str(&contents).unwrap();
 
         for blk in blocks.iter() {
@@ -370,24 +372,29 @@ fn run_serial_issuer() {
         total_bundle += 1;
     }
     println!("total_tx={} total_bundle={}", total_tx, total_bundle);
+
+    (total_tx, total_bundle)
 }
 
-fn run_scheduler() {
+pub fn run_scheduler() -> (usize, usize) {
     let mut scheduler = Scheduler::new();
     let mut total_bundle = 0usize;
     let mut total_tx = 0usize;
     for id in (20338810..20338850).step_by(10) {
         let mut file = OpenOptions::new()
             .read(true)
-            .open(format!("blocks/blocks_{}.json", id))
+            .open(format!(
+                "blocks/blocks_{}.json",
+                id
+            ))
             .expect("Could not read file");
         let mut contents = String::new();
         file.read_to_string(&mut contents).unwrap();
-        
+
         let blocks: Vec<Block> = serde_json::from_str(&contents).unwrap();
 
         //count_addr(&blocks);
-     
+
         for blk in blocks.iter() {
             let coinbase = blk.coinbase.to_lowercase();
             for tx in blk.tx_list.iter() {
@@ -398,7 +405,8 @@ fn run_scheduler() {
     }
     println!("AA total_tx={}", total_tx);
     scheduler.flush_all(&mut total_bundle);
-    println!("AA total_bundle={}", total_bundle); 
+    println!("AA total_bundle={}", total_bundle);
+    (total_tx, total_bundle)
 
     //let lines = read_lines("./blocks.txt").unwrap();
     //for line in lines.flatten() {

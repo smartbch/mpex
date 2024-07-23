@@ -510,6 +510,7 @@ dependencies = [
  "byteorder",
  "exepipe",
  "mpads",
+ "revm",
  "serde",
  "serde_json",
 ]
