@@ -718,15 +718,18 @@ mod tests {
         let mut scheduler = Scheduler::new(tpool, sender, blk_ctx.clone(), s);
         scheduler.start_new_block(1, blk_ctx);
 
-        let tx = TxEnv::default();
-        let tx_list: Vec<TxEnv> = vec![tx];
-        let task = ExeTask::new(tx_list);
-        let task_in = vec![task];
+        let task_in: Vec<ExeTask> = (0..MAX_TASKS_LEN_IN_BUNDLE)
+            .map(|_| {
+                let tx = TxEnv::default();
+                let tx_list: Vec<TxEnv> = vec![tx];
+                ExeTask::new_for_test(tx_list)
+            })
+            .collect();
         scheduler.add_tasks(task_in);
 
         // ensuring bundle still has tasks when execute flush_all_bundle_tasks
         let bundle = &scheduler.bundles[0];
-        assert_eq!(bundle.len(), 1);
+        assert_eq!(bundle.len(), MAX_TASKS_LEN_IN_BUNDLE);
 
         scheduler.flush_all_bundle_tasks();
 
