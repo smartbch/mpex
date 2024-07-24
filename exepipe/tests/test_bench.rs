@@ -14,7 +14,7 @@ mod tests {
         bench::{
             address::{create_caller_address, create_to_address},
             erc20::{create_deploy_and_transfer_tx, create_transfer_token_tx},
-            tasks::{create_conflict_tasks, create_no_conflict_tasks},
+            tasks::{create_collide_tasks, create_no_collide_tasks},
         },
         context::BlockContext,
         coordinator::Coordinator,
@@ -53,7 +53,7 @@ mod tests {
         let (ca_addr, slotmap) = get_slotmap_and_set_state(blk_ctx.curr_state.as_ref());
 
         // transfer  tokens
-        let tasks_in = create_conflict_tasks(&slotmap, &ca_addr, 20, 500);
+        let tasks_in = create_collide_tasks(&slotmap, &ca_addr, 20, 500);
         let task_list = (0..tasks_in.len() + 1)
             .map(|_| RwLock::new(Option::None))
             .collect();
@@ -99,7 +99,7 @@ mod tests {
         let (ca_addr, slotmap) = get_slotmap_and_set_state(blk_ctx.curr_state.as_ref());
 
         // transfer  tokens
-        let tasks_in = create_no_conflict_tasks(&slotmap, &ca_addr, 20, 500);
+        let tasks_in = create_no_collide_tasks(&slotmap, &ca_addr, 20, 500);
         let task_list = (0..tasks_in.len() + 1)
             .map(|_| RwLock::new(Option::None))
             .collect();

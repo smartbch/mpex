@@ -199,8 +199,8 @@ impl ExeTask {
         self.tx_accessed_slots_counts[index]
     }
 
-    //'a' task conflicts with 'b' task
-    pub fn conflicts(a: &ExeTask, b: &ExeTask) -> bool {
+    //'a' task collide with 'b' task
+    pub fn is_collision(a: &ExeTask, b: &ExeTask) -> bool {
         for &k64a in a.access_set.rdo_k64_vec.iter() {
             for &k64b in b.access_set.rnw_k64_vec.iter() {
                 if k64a == k64b {
