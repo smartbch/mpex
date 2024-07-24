@@ -25,7 +25,7 @@ fn get_addr_and_slot_index(
 //     tasks
 // }
 
-pub fn create_no_collide_tasks(
+pub fn create_non_colliding_tasks(
     slotmap: &HashMap<Address, U256>,
     ca_addr: &Address,
     txs_len_in_task: usize, // 20
@@ -57,7 +57,7 @@ pub fn create_no_collide_tasks(
     tasks
 }
 
-pub fn create_collide_tasks(
+pub fn create_colliding_tasks(
     slotmap: &HashMap<Address, U256>,
     ca_addr: &Address,
     txs_len_in_task: usize, // 20

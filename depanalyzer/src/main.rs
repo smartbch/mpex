@@ -167,7 +167,7 @@ fn merge_access_set(a: &mut AccessSet, b: &AccessSet, only_rnw: bool) {
     }
 }
 
-fn is_access_set_collision(a: &AccessSet, b: &AccessSet) -> bool {
+fn access_set_collide(a: &AccessSet, b: &AccessSet) -> bool {
     for hash in b.rdo_set.iter() {
         if a.rnw_set.contains(hash) {
             return true;
@@ -225,7 +225,7 @@ impl Scheduler {
             let target = self.bundles.get_mut(bundle_id).unwrap();
             while target.len() != 0 {
                 let (_txid, access_set) = target.pop_front().unwrap();
-                if is_access_set_collision(&bundle_set, &access_set) {
+                if access_set_collide(&bundle_set, &access_set) {
                     println!("BundleSize {}", bundle_size);
                     bundle_set.rdo_set.clear();
                     bundle_set.rnw_set.clear();
@@ -255,7 +255,7 @@ impl Scheduler {
         println!("depmask={:#016x}", mask);
         let mut bundle_id = mask.trailing_ones() as usize;
         // if we cannot find a bundle to insert task because
-        // it collide with all the bundles
+        // it collides with all the bundles
         if bundle_id == BUNDLE_COUNT {
             bundle_id = self.largest_bundle();
             self.pb.clear(bundle_id);
@@ -298,7 +298,7 @@ impl SerialIssuer {
 
     fn add_tx(&mut self, tx: &Tx, coinbase: &str, total_bundle: &mut usize) {
         let access_set = tx.to_access_set(coinbase);
-        if is_access_set_collision(&self.bundle_set, &access_set) {
+        if access_set_collide(&self.bundle_set, &access_set) {
             println!("BundleSize {}", self.bundle_size);
             self.bundle_set.rdo_set.clear();
             self.bundle_set.rnw_set.clear();

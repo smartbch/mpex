@@ -166,7 +166,7 @@ impl<T: PBElement> ParaBloom<T> {
 #[derive(Debug)]
 pub struct EarlyExeInfo {
     pub my_idx: i32,
-    pub min_all_done_index: i32, // task with my_idx not collide with all task before min_all_done_index.
+    pub min_all_done_index: i32, // task with my_idx does not collide with all task before min_all_done_index.
 }
 
 pub struct Scheduler {
@@ -245,7 +245,7 @@ impl Scheduler {
         let mask = self.pb.get_dep_mask(&task.access_set);
         let mut bundle_id = mask.trailing_ones() as usize;
         // if we cannot find a bundle to insert task because
-        // it collide with all the bundles
+        // it collides with all the bundles
         if bundle_id == BUNDLE_COUNT {
             bundle_id = self.first_can_flush_bundle();
             if bundle_id < BUNDLE_COUNT {
@@ -349,8 +349,8 @@ fn prepare_task_and_send_eei(
     for early_idx in (stop_detect..task_out_start).rev() {
         let other_opt = blk_ctx.tasks_manager.task_for_read(early_idx);
         let other = other_opt.as_ref().unwrap();
-        // stop loop when we find a collision peer
-        if ExeTask::is_collision(&task, other) {
+        // stop loop when we find a colliding peer
+        if ExeTask::has_collision(&task, other) {
             min_all_done_index = early_idx;
             break;
         }
