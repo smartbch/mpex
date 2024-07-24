@@ -108,33 +108,33 @@ mod tests {
         let mut scheduler = Scheduler::new(tpool, sender, blk_ctx.clone(), s.clone());
         scheduler.start_new_block(1, blk_ctx);
 
-        let recived_count = Arc::new(Mutex::new(0));
+        let flush_count = Arc::new(Mutex::new(0));
+        let executed_count = Arc::new(Mutex::new(0));
+
         let executed_set = Arc::new(Mutex::new(HashSet::<i32>::new()));
         let all_done_index = Arc::new(Mutex::new(-1));
         let early_exe_map = Arc::new(Mutex::new(HashMap::<i32, i32>::new()));
 
-        let _count = recived_count.clone();
         let _all_done_index = all_done_index.clone();
         let _early_exe_map = early_exe_map.clone();
         let _executed_set = executed_set.clone();
-        let _s = s.clone();
         thread::spawn(move || {
             while let Ok(received) = receiver.recv() {
                 // println!("Received: {:?}", received);
-
-                let mut count = _count.lock().unwrap();
-                *count += 1;
                 _early_exe_map
                     .lock()
                     .unwrap()
                     .insert(received.my_idx, received.min_all_done_index);
-                _s.send(received.my_idx).unwrap();
             }
         });
 
+        let _executed_count = executed_count.clone();
         thread::spawn(move || {
             while let Ok(received) = r.recv() {
                 {
+                    let mut executed_count = _executed_count.lock().unwrap();
+                    *executed_count += 1;
+
                     let mut executed_set = _executed_set.lock().unwrap();
                     executed_set.insert(received);
                 }
@@ -144,11 +144,13 @@ mod tests {
         let tasks_in_in = tasks_in.len();
         let _executed_set = executed_set.clone();
         let _early_exe_map = early_exe_map.clone();
+        let _flush_count = flush_count.clone();
         thread::spawn(move || loop {
             let mut new_all_done = _all_done_index.lock().unwrap();
             loop {
                 let mut executed_set = _executed_set.lock().unwrap();
                 let existed = executed_set.remove(&(*new_all_done + 1));
+
                 if existed {
                     *new_all_done += 1;
                     if *new_all_done == tasks_in_in as i32 - 1 {
@@ -158,17 +160,28 @@ mod tests {
                 } else {
                     break;
                 }
+            }
 
-                let start = *new_all_done + 1;
-                for idx in start..(*new_all_done + EARLY_EXE_WINDOW_SIZE as i32) {
-                    if let Some(min_all_done) = _early_exe_map.lock().unwrap().get(&idx) {
-                        if *min_all_done < start {
-                            s.send(idx).unwrap();
-                            let mut early_exe_map = _early_exe_map.lock().unwrap();
-                            early_exe_map.remove(&idx);
-                        }
+            let start = *new_all_done + 1;
+            let mut issue_count = 0;
+            for idx in start..(*new_all_done + EARLY_EXE_WINDOW_SIZE as i32) {
+                let mut _min_done = i32::MAX;
+                {
+                    if let Some(min_done) = _early_exe_map.lock().unwrap().get(&idx) {
+                        _min_done = *min_done;
                     }
                 }
+                if _min_done < start {
+                    issue_count += 1;
+                    let mut early_exe_map = _early_exe_map.lock().unwrap();
+                    early_exe_map.remove(&idx);
+                    s.send(idx).unwrap();
+                }
+            }
+
+            if issue_count > 0 {
+                let mut flush_count = _flush_count.lock().unwrap();
+                *flush_count += 1;
             }
         });
 
@@ -178,7 +191,8 @@ mod tests {
 
         thread::sleep(std::time::Duration::from_secs(2));
 
-        println!("Received count: {}", recived_count.lock().unwrap());
+        println!("executed_count: {}", executed_count.lock().unwrap());
+        println!("flush_count: {}", flush_count.lock().unwrap());
     }
 }
 
@@ -188,10 +202,7 @@ fn read_txs_in_from_files(ignore_eth: bool) -> Vec<Tx> {
     for id in (20338810..20338850).step_by(10) {
         let mut file = OpenOptions::new()
             .read(true)
-            .open(format!(
-                "blocks/blocks_{}.json",
-                id
-            ))
+            .open(format!("blocks/blocks_{}.json", id))
             .expect("Could not read file");
         let mut contents = String::new();
         file.read_to_string(&mut contents).unwrap();

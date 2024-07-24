@@ -28,13 +28,13 @@ pub fn generate_ads_wrap(
     Receiver<i32>,
 ) {
     let tpool = Arc::new(ThreadPool::new(128));
-    let (sender, receiver) = sync_channel(1024);
+    let (sender, receiver) = sync_channel(10240);
     AdsCore::init_dir(dir, 64 * 1024);
     let task_hub = Arc::new(BlockPairTaskHub::<SimpleTask>::new());
     let (ads, _, _) = AdsCore::new(task_hub, dir, 8 * 1024, 64 * 1024);
     let shared_ads_wrap =
         SharedAdsWrap::new(Arc::new(ads), Arc::new(entrycache::EntryCache::new()));
-    let (s, r) = mpsc::sync_channel(8192);
+    let (s, r) = mpsc::sync_channel(10240);
     (shared_ads_wrap, tpool, sender, receiver, s, r)
 }
 
