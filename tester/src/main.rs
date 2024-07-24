@@ -1,8 +1,7 @@
 use byteorder::{ByteOrder, LittleEndian};
 use mpads::changeset::ChangeSet;
 use mpads::def::{
-    COMPACT_THRES, CODE_SHARD_ID, DEFAULT_ENTRY_SIZE, IN_BLOCK_IDX_BITS, OP_DELETE, OP_WRITE,
-    SHARD_COUNT, UTILIZATION_DIV, UTILIZATION_RATIO, SENTRY_COUNT,
+    CODE_SHARD_ID, COMPACT_THRES, DEFAULT_ENTRY_SIZE, IN_BLOCK_IDX_BITS, OP_CREATE, OP_DELETE, OP_WRITE, SENTRY_COUNT, SHARD_COUNT, UTILIZATION_DIV, UTILIZATION_RATIO
 };
 use mpads::entry::EntryBz;
 use mpads::refdb::{byte0_to_shard_id, OpRecord, RefDB};
@@ -186,7 +185,7 @@ impl TestGenV1 {
             let code_len = rand_between(&mut self.randsrc, 10, self.max_code_len);
             let bytecode = self.randsrc.get_bytes(code_len);
             let kh = hasher::hash(&code_hash[..]);
-            cset.add_op(OP_WRITE, CODE_SHARD_ID as u8, &kh, &code_hash[..], &bytecode[..], None);
+            cset.add_op(OP_CREATE, CODE_SHARD_ID as u8, &kh, &code_hash[..], &bytecode[..], None);
             return;
         }
         let active_num = self.refdb.total_num_active();

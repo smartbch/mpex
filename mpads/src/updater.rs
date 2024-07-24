@@ -26,8 +26,10 @@ impl CodeUpdater {
         let task_hub = self.task_hub.clone();
         for change_set in &*task_hub.get_change_sets(task_id) {
             change_set.run_in_shard(CODE_SHARD_ID, |op, _kh, k, v, _r| match op {
-                OP_WRITE => self.write_kv(task_id, k, v),
-                _ => {}
+                OP_CREATE => self.create_kv(task_id, k, v),
+                _ => {
+                    panic!("CodeUpdater: unsupported operation");
+                }
             });
         }
         if end_block {
@@ -35,7 +37,7 @@ impl CodeUpdater {
         }
     }
 
-    fn write_kv(&mut self, task_id: i64, code_hash: &[u8], value: &[u8]) {
+    fn create_kv(&mut self, task_id: i64, code_hash: &[u8], value: &[u8]) {
         let new_entry = Entry {
             key: &[0u8],
             value: value,
@@ -172,7 +174,9 @@ impl Updater {
                     OP_WRITE => self.write_kv(&key_hash, k, v, r),
                     OP_CREATE => self.create_kv(&key_hash, k, v, r),
                     OP_DELETE => self.delete_kv(&key_hash, k, r),
-                    _ => {}
+                    _ => {
+                        panic!("Updater: unsupported operation");
+                    }
                 }
             });
         }
