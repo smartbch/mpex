@@ -8,13 +8,25 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::io::{self, BufRead};
 use std::path::Path;
+use std::mem;
 use std::{
     fs::{File, OpenOptions},
     io::{Read, Write},
 };
 
+const MAX_SET_SIZE: usize = 4;
+const START_HEIGHT: usize = 20338950;
+const END_HEIGHT: usize = 20343510;
+
 pub const WETH_ADDR: &str = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
-//const WETH_ADDR: &str = "";
+//pub const WETH_ADDR: &str = "";
+
+fn main() {
+    run_scheduler();
+    //run_serial_issuer();
+    //run_merge_tx();
+}
+
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Slot {
@@ -29,15 +41,17 @@ pub struct Tx {
     pub rnw_addr_list: Vec<String>,
     pub rdo_slot_list: Vec<Slot>,
     pub rnw_slot_list: Vec<Slot>,
+    pub from: String,
 }
 
 impl Tx {
-    fn to_access_set(&self, coinbase: &str) -> AccessSet {
-        let mut access_set = AccessSet::new();
+    fn fill_access_set(&self, coinbase: &str, access_set: &mut AccessSet) {
         for rdo_addr in self.rdo_addr_list.iter() {
             let hash = hasher::hash(rdo_addr);
-            access_set.rdo_k64_vec.push(BigEndian::read_u64(&hash[..8]));
-            access_set.rdo_set.insert(hash);
+            if !access_set.rdo_set.contains(&hash) {
+                access_set.rdo_k64_vec.push(BigEndian::read_u64(&hash[..8]));
+                access_set.rdo_set.insert(hash);
+            }
         }
         for rnw_addr in self.rnw_addr_list.iter() {
             if rnw_addr == coinbase {
@@ -47,22 +61,79 @@ impl Tx {
                 continue;
             }
             let hash = hasher::hash(rnw_addr);
-            access_set.rnw_k64_vec.push(BigEndian::read_u64(&hash[..8]));
-            access_set.rnw_set.insert(hash);
+            if !access_set.rnw_set.contains(&hash) {
+                access_set.rnw_k64_vec.push(BigEndian::read_u64(&hash[..8]));
+                access_set.rnw_set.insert(hash);
+            }
         }
         let mut buf = [0u8; 52];
         for rdo_slot in self.rdo_slot_list.iter() {
             let hash = hasher::hash("".to_owned() + &rdo_slot.addr + &rdo_slot.index);
-            access_set.rdo_k64_vec.push(BigEndian::read_u64(&hash[..8]));
-            access_set.rdo_set.insert(hash);
+            if !access_set.rdo_set.contains(&hash) {
+                access_set.rdo_k64_vec.push(BigEndian::read_u64(&hash[..8]));
+                access_set.rdo_set.insert(hash);
+            }
         }
         for rnw_slot in self.rnw_slot_list.iter() {
             let hash = hasher::hash("".to_owned() + &rnw_slot.addr + &rnw_slot.index);
-            access_set.rnw_k64_vec.push(BigEndian::read_u64(&hash[..8]));
-            access_set.rnw_set.insert(hash);
+            if !access_set.rnw_set.contains(&hash) {
+                access_set.rnw_k64_vec.push(BigEndian::read_u64(&hash[..8]));
+                access_set.rnw_set.insert(hash);
+            }
         }
+    }
+
+    fn to_access_set(&self, coinbase: &str) -> AccessSet {
+        let mut access_set = AccessSet::new();
+        self.fill_access_set(coinbase, &mut access_set);
         access_set
     }
+}
+
+fn merge_tx(tx_list: &Vec<Tx>) -> Vec<Vec<&Tx>> {
+    let mut sender_list: Vec<&String> = Vec::with_capacity(tx_list.len());
+    let mut sender_map: HashMap<&String, Vec<&Tx>> = HashMap::with_capacity(tx_list.len());
+    for tx in tx_list.iter() {
+        if sender_map.contains_key(&tx.from) {
+            let mut v = sender_map.get_mut(&tx.from).unwrap();
+            v.push(tx);
+        } else {
+            sender_list.push(&tx.from);
+            sender_map.insert(&tx.from, vec![tx]);
+        }
+    }
+    let mut result: Vec<Vec<&Tx>> = Vec::with_capacity(sender_list.len());
+    for &sender in sender_list.iter() {
+        let v = sender_map.remove(sender).unwrap();
+        //println!("AA sender={} task_size= {}", sender, v.len());
+        result.push(v);
+    }
+    result
+}
+
+pub fn run_merge_tx() {
+    let mut total_tx = 0;
+    let mut total_task = 0;
+    for id in (START_HEIGHT..END_HEIGHT).step_by(10) {
+        let mut file = OpenOptions::new()
+            .read(true)
+            .open(format!(
+                "blocks/blocks_{}.json",
+                id
+            ))
+            .expect("Could not read file");
+        let mut contents = String::new();
+        file.read_to_string(&mut contents).unwrap();
+
+        let blocks: Vec<Block> = serde_json::from_str(&contents).unwrap();
+
+        for blk in blocks.iter() {
+            total_tx += blk.tx_list.len();
+            let task_list = merge_tx(&blk.tx_list);
+            total_task += task_list.len();
+        }
+    }
+    println!("MergeResult total_tx={} total_task={}", total_tx, total_task);
 }
 
 #[derive(Deserialize, Debug)]
@@ -77,6 +148,7 @@ struct User {
     fingerprint: String,
     location: String,
 }
+
 
 struct AccessSetList<T: PBElement> {
     rdo_set_list: Vec<HashSet<[u8; 32]>>,
@@ -184,10 +256,10 @@ fn access_set_collide(a: &AccessSet, b: &AccessSet) -> bool {
     false
 }
 
-pub const BUNDLE_COUNT: usize = 64;
+pub const BUNDLE_COUNT: usize = 128;
 
 struct Scheduler {
-    pb: ParaBloom<u64>,
+    pb: ParaBloom<u128>,
     //pb: AccessSetList<u128>,
     bundles: Vec<VecDeque<(String, AccessSet)>>,
 }
@@ -244,15 +316,14 @@ impl Scheduler {
         println!("AA BeginBundle size={}", target.len());
         while target.len() != 0 {
             let (txid, _access_set) = target.pop_front().unwrap();
-            println!("{:?}", txid);
+            //println!("{:?}", txid);
         }
         println!("EndBundle");
     }
 
-    fn add_tx(&mut self, tx: &Tx, coinbase: &str, total_bundle: &mut usize) {
-        let access_set = tx.to_access_set(coinbase);
+    fn add_access_set(&mut self, txid: String, access_set: AccessSet, total_bundle: &mut usize) {
         let mask = self.pb.get_dep_mask(&access_set);
-        println!("depmask={:#016x}", mask);
+        //println!("depmask={:#016x}", mask);
         let mut bundle_id = mask.trailing_ones() as usize;
         // if we cannot find a bundle to insert task because
         // it collides with all the bundles
@@ -267,7 +338,7 @@ impl Scheduler {
         self.pb.add(bundle_id, &access_set);
 
         let target = self.bundles.get_mut(bundle_id).unwrap();
-        target.push_back((tx.txid.clone(), access_set));
+        target.push_back((txid, access_set));
 
         // flush the bundle if it's large enough
         if self.pb.get_rdo_set_size(bundle_id) > SET_MAX_SIZE
@@ -296,8 +367,7 @@ impl SerialIssuer {
         }
     }
 
-    fn add_tx(&mut self, tx: &Tx, coinbase: &str, total_bundle: &mut usize) {
-        let access_set = tx.to_access_set(coinbase);
+    fn add_access_set(&mut self, access_set: AccessSet, total_bundle: &mut usize) {
         if access_set_collide(&self.bundle_set, &access_set) {
             println!("BundleSize {}", self.bundle_size);
             self.bundle_set.rdo_set.clear();
@@ -330,24 +400,11 @@ fn count_addr(blocks: &Vec<Block>) {
     }
 }
 
-fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
-where
-    P: AsRef<Path>,
-{
-    let file = File::open(filename)?;
-    Ok(io::BufReader::new(file).lines())
-}
-
-fn main() {
-    run_scheduler();
-    //run_serial_issuer();
-}
-
 pub fn run_serial_issuer() -> (usize, usize) {
     let mut serial_issuer = SerialIssuer::new(false);
     let mut total_tx = 0;
     let mut total_bundle = 0;
-    for id in (20338810..20338850).step_by(10) {
+    for id in (START_HEIGHT..END_HEIGHT).step_by(10) {
         let mut file = OpenOptions::new()
             .read(true)
             .open(format!(
@@ -364,14 +421,16 @@ pub fn run_serial_issuer() -> (usize, usize) {
             let coinbase = blk.coinbase.to_lowercase();
             for tx in blk.tx_list.iter() {
                 total_tx += 1;
-                serial_issuer.add_tx(tx, &coinbase, &mut total_bundle);
+                let access_set = tx.to_access_set(&coinbase);
+                serial_issuer.add_access_set(access_set, &mut total_bundle);
             }
         }
     }
     if serial_issuer.bundle_size != 0 {
         total_bundle += 1;
     }
-    println!("total_tx={} total_bundle={}", total_tx, total_bundle);
+    println!("total_tx={} total_bundle={} TLP={}", total_tx, total_bundle,
+        (total_tx as f64)/(total_bundle as f64));
 
     (total_tx, total_bundle)
 }
@@ -380,7 +439,7 @@ pub fn run_scheduler() -> (usize, usize) {
     let mut scheduler = Scheduler::new();
     let mut total_bundle = 0usize;
     let mut total_tx = 0usize;
-    for id in (20338810..20338850).step_by(10) {
+    for id in (START_HEIGHT..END_HEIGHT).step_by(10) {
         let mut file = OpenOptions::new()
             .read(true)
             .open(format!(
@@ -393,26 +452,45 @@ pub fn run_scheduler() -> (usize, usize) {
 
         let blocks: Vec<Block> = serde_json::from_str(&contents).unwrap();
 
-        //count_addr(&blocks);
-
         for blk in blocks.iter() {
             let coinbase = blk.coinbase.to_lowercase();
-            for tx in blk.tx_list.iter() {
-                total_tx += 1;
-                scheduler.add_tx(tx, &coinbase, &mut total_bundle);
+
+            if blk.tx_list.len() == 0 {
+                continue;
+            }
+
+            total_tx += blk.tx_list.len();
+            if MAX_SET_SIZE > 1 {
+                let task_list = merge_tx(&blk.tx_list);
+                for tx_vec in task_list.iter() {
+                    let mut access_set = AccessSet::new();
+                    let mut set_size = 0usize;
+                    let mut txid = task_list[0][0].txid.clone();
+                    for tx in tx_vec.iter() {
+                        tx.fill_access_set(&coinbase, &mut access_set);
+                        set_size += 1;
+                        if set_size == MAX_SET_SIZE - 1 {
+                            let mut old = AccessSet::new();
+                            mem::swap(&mut old, &mut access_set);
+                            scheduler.add_access_set(txid.clone(), old, &mut total_bundle);
+                            set_size = 0;
+                            txid = tx.txid.clone();
+                        }
+                    }
+                    if set_size != 0 {
+                        scheduler.add_access_set(txid.clone(), access_set, &mut total_bundle);
+                    }
+                }
+            } else {
+                for tx in blk.tx_list.iter() {
+                    let access_set = tx.to_access_set(&coinbase);
+                    scheduler.add_access_set(tx.txid.clone(), access_set, &mut total_bundle);
+                }
             }
         }
     }
-    println!("AA total_tx={}", total_tx);
     scheduler.flush_all(&mut total_bundle);
-    println!("AA total_bundle={}", total_bundle);
+    println!("AA total_tx={} total_bundle={} TLP={}", total_tx, total_bundle,
+        (total_tx as f64)/(total_bundle as f64));
     (total_tx, total_bundle)
-
-    //let lines = read_lines("./blocks.txt").unwrap();
-    //for line in lines.flatten() {
-    //    let blk: Block = serde_json::from_str(&line).unwrap();
-    //    for tx in blk.tx_list.iter() {
-    //        scheduler.add_tx(tx);
-    //    }
-    //}
 }
