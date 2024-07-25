@@ -39,7 +39,7 @@ impl AccessSet {
         }
     }
 
-    pub fn add_tx(&mut self, tx: &TxEnv, for_test: bool) {
+    fn add_tx(&mut self, tx: &TxEnv, for_test: bool) {
         if !for_test {
             self.add_rnw_address(&tx.caller);
             if let TransactTo::Call(to_address) = tx.transact_to {
@@ -80,7 +80,7 @@ impl AccessSet {
         }
     }
 
-    pub fn add_rnw_address(&mut self, address: &Address) {
+    fn add_rnw_address(&mut self, address: &Address) {
         let hash = hasher::hash(address);
         self.rnw_set.insert(hash);
         self.rnw_k64_vec.push(BigEndian::read_u64(&hash[..8]));
@@ -106,8 +106,7 @@ pub struct ExeTask {
 
 impl Task for ExeTask {
     fn get_change_sets(&self) -> Arc<Vec<ChangeSet>> {
-        let change_set: &Arc<Vec<ChangeSet>> = self.change_sets.as_ref().unwrap();
-        change_set.clone()
+        self.change_sets.as_ref().unwrap().clone()
     }
 }
 
@@ -120,7 +119,7 @@ impl ExeTask {
         Self::_new(tx_list, true)
     }
 
-    pub fn _new(tx_list: Vec<TxEnv>, for_test: bool) -> Self {
+    fn _new(tx_list: Vec<TxEnv>, for_test: bool) -> Self {
         let mut access_set = AccessSet::new();
         let mut tx_accessed_slots_counts = Vec::with_capacity(tx_list.len());
 
@@ -138,7 +137,7 @@ impl ExeTask {
         }
 
         Self {
-            warmup_results: Vec::with_capacity(tx_list.len()),
+            warmup_results: Vec::new(),
             tx_list,
             access_set,
             change_sets: None,
@@ -184,8 +183,8 @@ impl ExeTask {
                 let rd_acc = *addr == READ_ACC;
                 let wr_acc = *addr == WRITE_ACC;
                 for u256 in u256list {
-                    let bytes32: [u8; 32] = u256.to_be_bytes();
                     if rd_acc || wr_acc {
+                        let bytes32: [u8; 32] = u256.to_be_bytes();
                         let address = Address::from_slice(&bytes32[12..]);
                         access_list.push((address, vec![]));
                     }
