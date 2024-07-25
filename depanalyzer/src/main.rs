@@ -14,7 +14,12 @@ use std::{
     io::{Read, Write},
 };
 
+#[cfg(feature = "merge_tx")]
 const MAX_SET_SIZE: usize = 4;
+
+#[cfg(feature = "no_merge_tx")]
+const MAX_SET_SIZE: usize = 1;
+
 const START_HEIGHT: usize = 20338950;
 const END_HEIGHT: usize = 20343510;
 
@@ -22,8 +27,11 @@ pub const WETH_ADDR: &str = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
 //pub const WETH_ADDR: &str = "";
 
 fn main() {
-    run_scheduler();
-    //run_serial_issuer();
+    if cfg!(feature = "reorder") {
+        run_scheduler();
+    } else {
+        run_serial_issuer();
+    }
     //run_merge_tx();
 }
 
@@ -256,14 +264,22 @@ fn access_set_collide(a: &AccessSet, b: &AccessSet) -> bool {
     false
 }
 
-pub const BUNDLE_COUNT: usize = 128;
+#[cfg(feature = "U128")]
+type UINT = u128;
+#[cfg(feature = "U64")]
+type UINT = u64;
+#[cfg(feature = "U32")]
+type UINT = u32;
 
+pub const BUNDLE_COUNT: usize = UINT::BITS as usize;
+
+#[cfg(feature = "bloomfilter")]
 struct Scheduler {
-    pb: ParaBloom<u128>,
-    //pb: AccessSetList<u128>,
+    pb: ParaBloom<UINT>,
     bundles: Vec<VecDeque<(String, AccessSet)>>,
 }
 
+#[cfg(feature = "bloomfilter")]
 impl Scheduler {
     pub fn new() -> Scheduler {
         let mut bundles = Vec::with_capacity(BUNDLE_COUNT);
@@ -272,11 +288,32 @@ impl Scheduler {
         }
         Scheduler {
             pb: ParaBloom::new(),
-            //pb: AccessSetList::new(),
             bundles,
         }
     }
+}
 
+#[cfg(feature = "setlist")]
+struct Scheduler {
+    pb: AccessSetList<UINT>,
+    bundles: Vec<VecDeque<(String, AccessSet)>>,
+}
+
+#[cfg(feature = "setlist")]
+impl Scheduler {
+    pub fn new() -> Scheduler {
+        let mut bundles = Vec::with_capacity(BUNDLE_COUNT);
+        for _ in 0..BUNDLE_COUNT {
+            bundles.push(VecDeque::with_capacity(MAX_TASKS_LEN_IN_BUNDLE));
+        }
+        Scheduler {
+            pb: AccessSetList::new(),
+            bundles,
+        }
+    }
+}
+
+impl Scheduler {
     pub fn largest_bundle(&self) -> usize {
         let mut largest_size = 0;
         let mut largest_id = 0;

@@ -10,3 +10,14 @@ serde = { version = "1.0.204", features = ["derive"] }
 serde_json = "1.0.120"
 byteorder = "1.5.0"
 revm = { version = "8", features = ["serde"] }
+
+[features]
+bloomfilter = []
+setlist = []
+U32 = []
+U64 = []
+U128 = []
+reorder = []
+no_merge_tx = []
+merge_tx = []
+
