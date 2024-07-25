@@ -786,7 +786,7 @@ impl Tree {
 
         (path.upper_path, path.root) = self.get_upper_path_and_root(twig_id);
         if path.upper_path.is_empty() {
-            panic!("Cannot find uppper path");
+            panic!("Cannot find upper path");
         }
 
         if twig_id == self.youngest_twig_id {

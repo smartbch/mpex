@@ -4,6 +4,7 @@
 /mpads/DataTree
 
 .idea
+.vscode
 /exepipe/tmp_ads
 .DS_Store
 tester/randsrc.dat
