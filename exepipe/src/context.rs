@@ -27,7 +27,7 @@ use revm::primitives::{
 use revm::{Evm, Handler};
 use std::collections::HashMap;
 use std::mem;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, RwLockReadGuard};
 
 // to support the execution of one transaction
 struct TxContext<'a, T: ADS> {
@@ -96,7 +96,7 @@ pub struct BlockContext<T: ADS> {
     prev_state: Arc<StateCache>,
     ads: T,
     block_env: BlockEnv,
-    pub results: Vec<RwLock<Option<Vec<Result<ResultAndState>>>>>,
+    results: Vec<RwLock<Option<Vec<Result<ResultAndState>>>>>,
     gas_fee_collect: AtomicU256,
 }
 
@@ -115,6 +115,16 @@ impl<T: ADS> BlockContext<T> {
 
     pub fn get_curr_state(&self) -> &StateCache {
         self.curr_state.as_ref()
+    }
+
+    pub fn read_result(
+        &self,
+        mut idx: isize,
+    ) -> RwLockReadGuard<Option<Vec<Result<ResultAndState, anyhow::Error>>>> {
+        if idx < 0 {
+            idx = self.results.len() as isize - idx;
+        }
+        self.results[idx as usize].read().unwrap()
     }
 
     pub fn start_new_block(

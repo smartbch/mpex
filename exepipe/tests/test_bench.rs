@@ -82,7 +82,7 @@ mod tests {
         let duration = start.elapsed();
         println!("Time elapsed: {:?}", duration);
 
-        let r = &blk_ctx.results[blk_ctx.results.len() - 2].read().unwrap();
+        let r = &blk_ctx.read_result(-2);
         let r1 = r.as_ref().unwrap();
         let r2 = r1.get(r1.len() - 1).unwrap();
         let r3 = &r2.as_ref().unwrap().result;
@@ -128,7 +128,7 @@ mod tests {
         let duration = start.elapsed();
         println!("Time elapsed: {:?}", duration);
 
-        let r = &blk_ctx.results[blk_ctx.results.len() - 2].read().unwrap();
+        let r = &blk_ctx.read_result(-2);
         let r1 = r.as_ref().unwrap();
         let r2 = r1.get(r1.len() - 1).unwrap();
         let r3 = &r2.as_ref().unwrap().result;
@@ -179,7 +179,7 @@ mod tests {
         let mut coordinator = coord_thread.join().unwrap();
         coordinator.end_block();
 
-        println!("----results: {:?}", blk_ctx.results);
+        // println!("----results: {:?}", blk_ctx.results);
     }
 
     fn get_slotmap_and_set_state(blk_state: &StateCache) -> (Address, HashMap<Address, U256>) {

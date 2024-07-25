@@ -60,7 +60,7 @@ mod tests {
 
         // println!("block_ctx.results = {:?}", block_ctx.results);
 
-        let result0 = block_ctx.results[0].read().unwrap();
+        let result0 = block_ctx.read_result(0);
         for r in result0.deref().as_ref().unwrap() {
             assert!(r.as_ref().unwrap().result.is_success());
         }
@@ -84,7 +84,7 @@ mod tests {
 
         // println!("block_ctx.results = {:?}", block_ctx.results);
 
-        let result0 = block_ctx.results[0].read().unwrap();
+        let result0 = block_ctx.read_result(0);
         for r in result0.deref().as_ref().unwrap() {
             assert!(r.as_ref().unwrap().result.is_success());
         }
@@ -107,7 +107,7 @@ mod tests {
         block_ctx.end_block();
 
         // println!("block_ctx.results = {:?}", block_ctx.results);
-        let r = block_ctx.results[0].read().unwrap();
+        let r = block_ctx.read_result(0);
         let s = r.deref().as_ref().unwrap()[0].as_ref().unwrap_err();
         assert!(format!("{:?}", s).contains("EVM transact error: Transaction(LackOfFundForMaxFee"));
 
@@ -131,7 +131,7 @@ mod tests {
         block_ctx.end_block();
 
         // println!("block_ctx.results = {:?}", block_ctx.results);
-        let r = block_ctx.results[0].read().unwrap();
+        let r = block_ctx.read_result(0);
         let s = r.deref().as_ref().unwrap()[0].as_ref().unwrap_err();
         assert!(format!("{:?}", s).contains("Tx 0 warmup error: Cannot find caller account"));
 
@@ -189,7 +189,7 @@ mod tests {
         block_ctx.end_block();
 
         // println!("block_ctx.results = {:?}", block_ctx.results);
-        let result0 = block_ctx.results[0].read().unwrap();
+        let result0 = block_ctx.read_result(0);
         let v = result0.deref().as_ref().unwrap();
         let rs = v[0].as_ref().unwrap();
         let contract_acc = rs.state.get(&ca_addr).unwrap();
@@ -226,7 +226,7 @@ mod tests {
         block_ctx.execute(0);
         block_ctx.end_block();
 
-        let r = block_ctx.results[0].read().unwrap();
+        let r = block_ctx.read_result(0);
         let s = r.deref().as_ref().unwrap()[0].as_ref().unwrap_err();
         assert!(format!("{:?}", s).contains("Tx 0 warmup error: Cannot find bytecode for 0x7807a83790a6c471b7da667f716ae2d628a3012619829c7d31b5c3257bf39ecc"));
 
@@ -248,7 +248,7 @@ mod tests {
         block_ctx.end_block();
 
         // println!("block_ctx.results = {:?}", block_ctx.results);
-        let r = block_ctx.results[0].read().unwrap();
+        let r = block_ctx.read_result(0);
         let s = r.deref().as_ref().unwrap()[0].as_ref().unwrap_err();
         assert!(format!("{:?}", s).contains("EVM transact error: Database(Slot 0x0000000000000000000000000000000000000CcC/0 is not in access set"));
         check_account_info(&block_ctx, &eoa_addr, 999999998000000000u128, 1);
@@ -281,7 +281,7 @@ mod tests {
         block_ctx.end_block();
         // println!("block_ctx.results = {:?}", block_ctx.results);
 
-        let r = block_ctx.results[0].read().unwrap();
+        let r = block_ctx.read_result(0);
         let s = r.deref().as_ref().unwrap()[0].as_ref().unwrap_err();
         assert!(format!("{:?}", s).contains("Commit state change error: Slot 0x0000000000000000000000000000000000000CcC/0 is not in write set"));
 
