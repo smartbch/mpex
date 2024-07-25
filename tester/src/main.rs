@@ -1,4 +1,4 @@
-use byteorder::{ByteOrder, LittleEndian};
+use byteorder::{ByteOrder, BigEndian, LittleEndian};
 use mpads::changeset::ChangeSet;
 use mpads::def::{
     CODE_SHARD_ID, COMPACT_THRES, DEFAULT_ENTRY_SIZE, IN_BLOCK_IDX_BITS, OP_CREATE, OP_DELETE, OP_WRITE, SENTRY_COUNT, SHARD_COUNT, UTILIZATION_DIV, UTILIZATION_RATIO
@@ -16,8 +16,17 @@ use std::collections::HashSet;
 use std::sync::{Arc, RwLock};
 
 const BLOCK_COUNT: usize = 200;
+const ROUND_COUNT: usize = 500;
 
 fn main() {
+    run_v1();
+    //run_v2();
+}
+
+
+///////////
+
+fn run_v1() {
     let file_name = "randsrc.dat";
     let randsrc = RandSrc::new(file_name, "mpads-1");
 
@@ -57,8 +66,6 @@ fn main() {
         }
     }
 }
-
-///////////
 
 fn rand_between(randsrc: &mut RandSrc, min: usize, max: usize) -> usize {
     let span = max - min;
@@ -235,5 +242,146 @@ impl TestGenV1 {
             }
             return (k, kh, v);
         }
+    }
+}
+
+// ==========================
+
+fn run_v2() {
+    let file_name = "randsrc.dat";
+    let randsrc = RandSrc::new(file_name, "mpads-1");
+
+    let mut test_gen = TestGenV2::new(randsrc);
+
+    let ads_dir = "ADS";
+    let wrbuf_size = 256 * 1024;
+    let file_block_size = 128 * 1024 * 1024;
+    AdsCore::init_dir(ads_dir, file_block_size);
+    let mut ads = AdsWrap::new(ads_dir, wrbuf_size, file_block_size);
+
+    let total_blocks = test_gen.block_in_round() * ROUND_COUNT;
+    for height in 0..total_blocks {
+        let height = height as i64;
+        let task_list = test_gen.gen_block();
+        let task_count = task_list.len() as i64;
+        println!("AA height={} task_count={:#08x}", height, task_count);
+        let last_task_id = (height << IN_BLOCK_IDX_BITS) | (task_count - 1);
+        ads.start_block(height, Arc::new(TasksManager::new(task_list, last_task_id)));
+        let shared_ads = ads.get_shared();
+        for idx in 0..task_count {
+            let task_id = (height << IN_BLOCK_IDX_BITS) | idx;
+            //println!("AA Fuzz height={} task_id={:#08x}", height, task_id);
+            shared_ads.add_task(task_id);
+        }
+    }
+}
+
+pub struct ShuffleParam {
+    pub total_bits: usize,
+    pub rotate_bits: usize,
+    pub add_num: u64,
+    pub xor_num: u64,
+}
+
+impl ShuffleParam {
+    pub fn new(total_bits: usize) -> Self {
+        Self {
+            total_bits,
+            rotate_bits: 0,
+            add_num: 0,
+            xor_num: 0,
+        }
+    }
+
+    pub fn change(&self, mut x: u64) -> u64 {
+        let mask = (1u64 << self.total_bits) - 1;
+        x = (x + self.add_num) & mask;
+        x = (x ^ self.xor_num) & mask;
+        ((x>>self.rotate_bits) | (x<<(self.total_bits-self.rotate_bits))) & mask
+    }
+}
+
+pub struct TestGenV2 {
+    pub cset_in_task: usize,
+    pub task_in_block: usize,
+    pub bits_of_num: usize,
+    curr_num: u64,
+    curr_round: usize,
+    curr_height: usize,
+    pub randsrc: RandSrc,
+}
+
+impl TestGenV2 {
+    pub fn new(randsrc: RandSrc) -> Self {
+        Self {
+            cset_in_task: 8,
+            task_in_block: 4096,
+            bits_of_num: 25,
+            curr_num: 0,
+            curr_round: 0,
+            curr_height: 0,
+            randsrc,
+        }
+    }
+
+    pub fn block_in_round(&self) -> usize {
+        (1 << self.bits_of_num) / self.task_in_block / self.cset_in_task
+    }
+
+    pub fn gen_block(&mut self) -> Vec<RwLock<Option<SimpleTask>>> {
+        let mut sp = ShuffleParam::new(self.bits_of_num);
+        let blk_count = self.block_in_round();
+        let mut res = Vec::with_capacity(self.task_in_block);
+        for i in 0..self.task_in_block {
+            let task = self.gen_task(&sp);
+            res.push(RwLock::new(Some(task)));
+        }
+        self.curr_height += 1;
+        if self.curr_height % blk_count == 0 {
+            self.curr_round += 1;
+            sp.rotate_bits = self.randsrc.get_uint32() as usize % self.bits_of_num;
+            sp.add_num = self.randsrc.get_uint64();
+            sp.xor_num = self.randsrc.get_uint64();
+        }
+        res
+    }
+
+    pub fn gen_task(&mut self, sp: &ShuffleParam) -> SimpleTask {
+        let mut v = Vec::with_capacity(self.cset_in_task);
+        for _ in 0..self.cset_in_task {
+            v.push(self.gen_cset(sp));
+        }
+        SimpleTask::new(v)
+    }
+
+    pub fn gen_cset(&mut self, sp: &ShuffleParam) -> ChangeSet {
+        let mut cset = ChangeSet::new();
+        let mut k = [0u8; 32+20];
+        let mut kh = [0u8; 32];
+        let mut v = [0u8; 32];
+        BigEndian::write_u64(&mut k[..8], self.curr_round as u64);
+        let mut op_type = OP_WRITE;
+        if self.curr_round == 0 {
+            op_type = OP_CREATE;
+        }
+        for _ in 0..self.cset_in_task {
+            let num = sp.change(self.curr_num);
+            self.curr_num += 1;
+            BigEndian::write_u64(&mut k[..8], self.curr_num);
+            let hash = hasher::hash(&k[..8]);
+            k[..20].copy_from_slice(&hash[..]);
+            kh = hasher::hash(&k[..]);
+            let shard_id = kh[0] >> 4;
+            cset.add_op(
+                op_type,
+                shard_id,
+                &kh,
+                &k[..],
+                &v[..],
+                None,
+            );
+        }
+        cset.sort();
+        cset
     }
 }
