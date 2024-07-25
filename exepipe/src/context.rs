@@ -91,7 +91,7 @@ pub struct BlockContext<T: ADS> {
     // scheduler may mark failed tasks
     pub tasks_manager: Arc<TasksManager<ExeTask>>,
     // StateCache for current block
-    pub curr_state: Arc<StateCache>,
+    curr_state: Arc<StateCache>,
     // StateCache for previous block
     prev_state: Arc<StateCache>,
     ads: T,
@@ -111,6 +111,10 @@ impl<T: ADS> BlockContext<T> {
             results: Vec::new(),
             gas_fee_collect: AtomicU256::zero(),
         }
+    }
+
+    pub fn get_curr_state(&self) -> &StateCache {
+        self.curr_state.as_ref()
     }
 
     pub fn start_new_block(

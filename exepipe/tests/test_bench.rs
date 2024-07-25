@@ -50,7 +50,7 @@ mod tests {
         let _tmp_dir = TempDir::new(dir);
         let (shared_ads_wrap, tpool, sender, receivers, s, r) = generate_ads_wrap(dir);
         let mut blk_ctx = BlockContext::new(shared_ads_wrap);
-        let (ca_addr, slotmap) = get_slotmap_and_set_state(blk_ctx.curr_state.as_ref());
+        let (ca_addr, slotmap) = get_slotmap_and_set_state(blk_ctx.get_curr_state());
 
         // transfer  tokens
         let tasks_in = create_colliding_tasks(&slotmap, &ca_addr, 20, 500);
@@ -96,7 +96,7 @@ mod tests {
         let _tmp_dir = TempDir::new(dir);
         let (shared_ads_wrap, tpool, sender, receivers, s, r) = generate_ads_wrap(dir);
         let mut blk_ctx = BlockContext::new(shared_ads_wrap);
-        let (ca_addr, slotmap) = get_slotmap_and_set_state(blk_ctx.curr_state.as_ref());
+        let (ca_addr, slotmap) = get_slotmap_and_set_state(blk_ctx.get_curr_state());
 
         // transfer  tokens
         let tasks_in = create_non_colliding_tasks(&slotmap, &ca_addr, 20, 500);
@@ -142,7 +142,7 @@ mod tests {
         let _tmp_dir = TempDir::new(dir);
         let (shared_ads_wrap, tpool, sender, receivers, s, r) = generate_ads_wrap(dir);
         let mut blk_ctx = BlockContext::new(shared_ads_wrap);
-        let (ca_addr, slotmap) = get_slotmap_and_set_state(blk_ctx.curr_state.as_ref());
+        let (ca_addr, slotmap) = get_slotmap_and_set_state(blk_ctx.get_curr_state());
 
         // transfer 1 token
         let addrs = slotmap.keys().cloned().collect::<Vec<_>>();

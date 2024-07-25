@@ -298,7 +298,7 @@ fn check_account_info(
 ) {
     let mut buf = [0u8; ACC_INFO_LEN];
     block_ctx
-        .curr_state
+        .get_curr_state()
         .lookup_data(&hasher::hash(eoa_addr.to_vec().as_slice()), &mut buf);
     let acc = decode_account_info(&buf);
     assert_eq!(acc.balance, U256::from(balance));
