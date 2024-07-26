@@ -4,7 +4,6 @@ use mpads::def::IN_BLOCK_IDX_BITS;
 use mpads::SharedAdsWrap;
 use num_traits::Num;
 use std::collections::VecDeque;
-use std::mem;
 use std::sync::mpsc;
 use std::sync::Arc;
 use threadpool::ThreadPool;
@@ -207,12 +206,6 @@ impl Scheduler {
         }
     }
 
-    pub fn take_out_fail_vec(&mut self) -> Vec<ExeTask> {
-        let mut out = Vec::<ExeTask>::new();
-        mem::swap(&mut out, &mut self.fail_vec);
-        out
-    }
-
     pub fn start_new_block(&mut self, height: i64, blk_ctx: Arc<BlockContext>) {
         self.height = height;
         self.blk_ctx = blk_ctx;
@@ -224,7 +217,7 @@ impl Scheduler {
         self.out_idx = 0;
     }
 
-    pub fn first_can_flush_bundle(&self) -> usize {
+    fn first_can_flush_bundle(&self) -> usize {
         for i in 0..BUNDLE_COUNT {
             if self.bundles[i].len() > MIN_TASKS_LEN_IN_BUNDLE {
                 return i;
@@ -299,8 +292,7 @@ impl Scheduler {
                 let task = target.pop_front().unwrap();
                 task.set_task_out_start(task_out_start);
                 // append task to out_vec
-                let mut out_ptr = self.blk_ctx.tasks_manager.task_for_write(self.out_idx);
-                *out_ptr = Some(task);
+                self.blk_ctx.tasks_manager.set_task(self.out_idx, task);
             }
             let ctx = self.blk_ctx.clone();
             let task_idx = self.out_idx;

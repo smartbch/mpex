@@ -84,10 +84,7 @@ impl ExePipe {
         //wait coordinator to finish
         self.coordinator = Some(coord_thread.join().unwrap());
         // add endblock logic here as of all txs has done here when coordinator.run() exit.
-        self.end_block();
-    }
 
-    fn end_block(&mut self) {
         // coordinator must exist here.
         self.coordinator.as_mut().unwrap().end_block();
     }

@@ -184,10 +184,14 @@ impl<T: ADS> BlockContext<T> {
             self.curr_state.apply_change(&change_set);
             change_sets.push(change_set);
         }
-        let mut result_opt = self.results[idx].write().unwrap();
-        *result_opt = Option::Some(task_result);
+        self.set_task_result(idx, task_result);
         // from now on, change_set is a read-only field in task
         task.set_change_sets(Arc::new(change_sets));
+    }
+
+    fn set_task_result(&self, idx: usize, task_result: Vec<Result<ResultAndState>>) {
+        let mut result_opt = self.results[idx].write().unwrap();
+        *result_opt = Option::Some(task_result);
     }
 
     fn handle_transaction(
@@ -374,10 +378,8 @@ impl<T: ADS> BlockContext<T> {
         self.curr_state.apply_change(&change_set);
         task.set_change_sets(Arc::new(vec![change_set]));
         let idx = (end_block_task_id & IN_BLOCK_IDX_MASK) as usize;
-        let mut out_ptr = self.tasks_manager.task_for_write(idx);
-        *out_ptr = Some(task);
-        let mut result_opt = self.results[idx].write().unwrap();
-        *result_opt = Option::Some(task_result);
+        self.tasks_manager.set_task(idx, task);
+        self.set_task_result(idx, task_result);
 
         self.send_to_ads(end_block_task_id);
     }

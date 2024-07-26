@@ -55,4 +55,8 @@ impl<T: Task> TasksManager<T> {
         }
         self.tasks[idx].write().unwrap()
     }
+    pub fn set_task(&self, idx: usize,  task: T) {
+        let mut out_ptr = self.task_for_write(idx);
+        *out_ptr = Some(task);
+    } 
 }
