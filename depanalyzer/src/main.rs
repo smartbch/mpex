@@ -345,7 +345,7 @@ impl Scheduler {
             while target.len() != 0 {
                 let (_txid, access_set) = target.pop_front().unwrap();
                 if access_set_collide(&bundle_set, &access_set) {
-                    println!("BundleSize {}", bundle_size);
+                    //println!("BundleSize {}", bundle_size);
                     bundle_set.rdo_set.clear();
                     bundle_set.rnw_set.clear();
                     bundle_size = 0;
@@ -360,12 +360,13 @@ impl Scheduler {
 
     fn flush_bundle(&mut self, bundle_id: usize) {
         let target = self.bundles.get_mut(bundle_id).unwrap();
-        //println!("AA BeginBundle size={}", target.len());
-        while target.len() != 0 {
-            let (txid, _access_set) = target.pop_front().unwrap();
-            //println!("{:?}", txid);
-        }
-        //println!("EndBundle");
+        target.truncate(0);
+        // //println!("AA BeginBundle size={}", target.len());
+        // while target.len() != 0 {
+        //     let (txid, _access_set) = target.pop_front().unwrap();
+        //     //println!("{:?}", txid);
+        // }
+        // //println!("EndBundle");
     }
 
     fn add_access_set(&mut self, txid: String, access_set: Box<AccessSet>, total_bundle: &mut usize) {
@@ -579,8 +580,8 @@ pub fn test_scheduler_speed() {
     for _ in 0..size {
         let (txid, access_set) = all_access_sets.pop_front().unwrap();
         scheduler.add_access_set(txid, access_set, &mut total_bundle);
-        scheduler.flush_all(&mut total_bundle);
     }
+    scheduler.flush_all(&mut total_bundle);
 
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?}", elapsed);
