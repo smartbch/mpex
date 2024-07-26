@@ -13,6 +13,7 @@ use std::{
     fs::{File, OpenOptions},
     io::{Read, Write},
 };
+use std::time::Instant;
 
 #[cfg(feature = "aggregate_tx")]
 const MAX_TX_IN_TASK: usize = 4;
@@ -27,7 +28,11 @@ pub const WETH_ADDR: &str = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
 
 fn main() {
     if cfg!(feature = "reorder") {
-        run_scheduler();
+        if cfg!(feature = "test_speed") {
+            test_scheduler_speed();
+        } else {
+            run_scheduler();
+        }
     } else {
         run_serial_issuer();
     }
@@ -52,7 +57,7 @@ pub struct Tx {
 }
 
 impl Tx {
-    fn fill_access_set(&self, coinbase: &str, access_set: &mut AccessSet) {
+    fn fill_access_set(&self, coinbase: &str, access_set: &mut Box<AccessSet>) {
         for rdo_addr in self.rdo_addr_list.iter() {
             let hash = hasher::hash(rdo_addr);
             if !access_set.rdo_set.contains(&hash) {
@@ -92,8 +97,8 @@ impl Tx {
         }
     }
 
-    fn to_access_set(&self, coinbase: &str) -> AccessSet {
-        let mut access_set = AccessSet::new();
+    fn to_access_set(&self, coinbase: &str) -> Box<AccessSet> {
+        let mut access_set = Box::new(AccessSet::new());
         self.fill_access_set(coinbase, &mut access_set);
         access_set
     }
@@ -196,7 +201,7 @@ impl AccessSetList {
     //pub rdo_set: HashSet<[u8; 32]>,
     //pub rnw_set: HashSet<[u8; 32]>,
 
-    pub fn get_dep_mask(&self, access_set: &AccessSet) -> UINT {
+    pub fn get_dep_mask(&self, access_set: &Box<AccessSet>) -> UINT {
         let mut result = 0 as UINT;
         let mut mask = 1 as UINT;
         for idx in 0..self.rnw_set_list.len() {
@@ -230,7 +235,7 @@ impl AccessSetList {
         }
     }
 
-    pub fn add(&mut self, idx: usize, access_set: &AccessSet) {
+    pub fn add(&mut self, idx: usize, access_set: &Box<AccessSet>) {
         for &hash in access_set.rdo_set.iter() {
             self.rdo_set_list[idx].insert(hash);
         }
@@ -240,7 +245,7 @@ impl AccessSetList {
     }
 }
 
-fn merge_access_set(a: &mut AccessSet, b: &AccessSet, only_rnw: bool) {
+fn merge_access_set(a: &mut Box<AccessSet>, b: &Box<AccessSet>, only_rnw: bool) {
     for &hash in b.rdo_set.iter() {
         if only_rnw {
             a.rnw_set.insert(hash);
@@ -253,7 +258,7 @@ fn merge_access_set(a: &mut AccessSet, b: &AccessSet, only_rnw: bool) {
     }
 }
 
-fn access_set_collide(a: &AccessSet, b: &AccessSet) -> bool {
+fn access_set_collide(a: &Box<AccessSet>, b: &Box<AccessSet>) -> bool {
     for hash in b.rdo_set.iter() {
         if a.rnw_set.contains(hash) {
             return true;
@@ -273,21 +278,21 @@ fn access_set_collide(a: &AccessSet, b: &AccessSet) -> bool {
 #[cfg(feature = "bloomfilter")]
 struct Scheduler {
     pb: ParaBloom<UINT>,
-    bundles: Vec<VecDeque<(String, AccessSet)>>,
+    bundles: Vec<VecDeque<(String, Box<AccessSet>)>>,
     num_sets: usize,
 }
 
 #[cfg(feature = "bloomfilter")]
 impl Scheduler {
     pub fn new() -> Scheduler {
-        let mut bundles = Vec::with_capacity(UINT::BITS);
+        let mut bundles = Vec::with_capacity(UINT::BITS as usize);
         for _ in 0..UINT::BITS {
             bundles.push(VecDeque::with_capacity(MAX_TASKS_LEN_IN_BUNDLE));
         }
         Scheduler {
             pb: ParaBloom::new(),
             bundles,
-            num_sets: UINT::BITS,
+            num_sets: UINT::BITS as usize,
         }
     }
 }
@@ -295,7 +300,7 @@ impl Scheduler {
 #[cfg(not(feature = "bloomfilter"))]
 struct Scheduler {
     pb: AccessSetList,
-    bundles: Vec<VecDeque<(String, AccessSet)>>,
+    bundles: Vec<VecDeque<(String, Box<AccessSet>)>>,
     num_sets: usize,
 }
 
@@ -332,8 +337,8 @@ impl Scheduler {
     }
 
     fn flush_all(&mut self, total_bundle: &mut usize) {
-        println!("AA flush_all");
-        let mut bundle_set = AccessSet::new();
+        //println!("AA flush_all");
+        let mut bundle_set = Box::new(AccessSet::new());
         let mut bundle_size = 0;
         for bundle_id in 0..self.num_sets {
             let target = self.bundles.get_mut(bundle_id).unwrap();
@@ -355,15 +360,15 @@ impl Scheduler {
 
     fn flush_bundle(&mut self, bundle_id: usize) {
         let target = self.bundles.get_mut(bundle_id).unwrap();
-        println!("AA BeginBundle size={}", target.len());
+        //println!("AA BeginBundle size={}", target.len());
         while target.len() != 0 {
             let (txid, _access_set) = target.pop_front().unwrap();
-            println!("{:?}", txid);
+            //println!("{:?}", txid);
         }
-        println!("EndBundle");
+        //println!("EndBundle");
     }
 
-    fn add_access_set(&mut self, txid: String, access_set: AccessSet, total_bundle: &mut usize) {
+    fn add_access_set(&mut self, txid: String, access_set: Box<AccessSet>, total_bundle: &mut usize) {
         let mask = self.pb.get_dep_mask(&access_set);
         //println!("depmask={:#016x}", mask);
         let mut bundle_id = mask.trailing_ones() as usize;
@@ -395,7 +400,7 @@ impl Scheduler {
 }
 
 struct SerialIssuer {
-    bundle_set: AccessSet,
+    bundle_set: Box<AccessSet>,
     bundle_size: usize,
     only_rnw: bool,
 }
@@ -403,13 +408,13 @@ struct SerialIssuer {
 impl SerialIssuer {
     fn new(only_rnw: bool) -> Self {
         Self {
-            bundle_set: AccessSet::new(),
+            bundle_set: Box::new(AccessSet::new()),
             bundle_size: 0,
             only_rnw,
         }
     }
 
-    fn add_access_set(&mut self, access_set: AccessSet, total_bundle: &mut usize) {
+    fn add_access_set(&mut self, access_set: Box<AccessSet>, total_bundle: &mut usize) {
         if access_set_collide(&self.bundle_set, &access_set) {
             println!("BundleSize {}", self.bundle_size);
             self.bundle_set.rdo_set.clear();
@@ -508,14 +513,14 @@ pub fn run_scheduler() -> (usize, usize) {
             if MAX_TX_IN_TASK > 1 {
                 let task_list = aggregate_tx(&blk.tx_list);
                 for tx_vec in task_list.iter() {
-                    let mut access_set = AccessSet::new();
+                    let mut access_set = Box::new(AccessSet::new());
                     let mut set_size = 0usize;
                     let mut txid = task_list[0][0].txid.clone();
                     for tx in tx_vec.iter() {
                         tx.fill_access_set(&coinbase, &mut access_set);
                         set_size += 1;
                         if set_size == MAX_TX_IN_TASK - 1 {
-                            let mut old = AccessSet::new();
+                            let mut old = Box::new(AccessSet::new());
                             mem::swap(&mut old, &mut access_set);
                             scheduler.add_access_set(txid.clone(), old, &mut total_bundle);
                             set_size = 0;
@@ -538,4 +543,46 @@ pub fn run_scheduler() -> (usize, usize) {
     println!("AA total_tx={} total_bundle={} TLP={}", total_tx, total_bundle,
         (total_tx as f64)/(total_bundle as f64));
     (total_tx, total_bundle)
+}
+
+pub fn test_scheduler_speed() {
+    let mut scheduler = Scheduler::new();
+    let mut all_access_sets: VecDeque<(String, Box<AccessSet>)> = VecDeque::new();
+    for id in (START_HEIGHT..START_HEIGHT+800).step_by(10) {
+        let mut file = OpenOptions::new()
+            .read(true)
+            .open(format!(
+                "blocks/blocks_{}.json",
+                id
+            ))
+            .expect("Could not read file");
+        let mut contents = String::new();
+        file.read_to_string(&mut contents).unwrap();
+
+        let blocks: Vec<Block> = serde_json::from_str(&contents).unwrap();
+
+        for blk in blocks.iter() {
+            let coinbase = blk.coinbase.to_lowercase();
+
+            for tx in blk.tx_list.iter() {
+                let access_set = tx.to_access_set(&coinbase);
+                all_access_sets.push_back((tx.txid.clone(), access_set));
+            }
+        }
+    }
+
+    let size = all_access_sets.len();
+    println!("AA all_access_sets.len()={}", size);
+    let now = Instant::now();
+
+    let mut total_bundle = 0;
+    for _ in 0..size {
+        let (txid, access_set) = all_access_sets.pop_front().unwrap();
+        scheduler.add_access_set(txid, access_set, &mut total_bundle);
+        scheduler.flush_all(&mut total_bundle);
+    }
+
+    let elapsed = now.elapsed();
+    println!("Elapsed: {:.2?}", elapsed);
+    println!("Speed: {:.2?}", (size as f64)*1e9/(elapsed.as_nanos() as f64));
 }

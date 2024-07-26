@@ -21,4 +21,5 @@ reorder = []
 aggregate_tx = []
 uni_set = []
 ignore_weth = []
+test_speed = []
 
