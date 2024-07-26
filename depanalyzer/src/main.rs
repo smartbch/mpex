@@ -14,17 +14,16 @@ use std::{
     io::{Read, Write},
 };
 
-#[cfg(feature = "merge_tx")]
-const MAX_SET_SIZE: usize = 4;
+#[cfg(feature = "aggregate_tx")]
+const MAX_TX_IN_TASK: usize = 4;
 
-#[cfg(feature = "no_merge_tx")]
-const MAX_SET_SIZE: usize = 1;
+#[cfg(not(feature = "aggregate_tx"))]
+const MAX_TX_IN_TASK: usize = 1;
 
 const START_HEIGHT: usize = 20338950;
 const END_HEIGHT: usize = 20343510;
 
 pub const WETH_ADDR: &str = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
-//pub const WETH_ADDR: &str = "";
 
 fn main() {
     if cfg!(feature = "reorder") {
@@ -32,7 +31,7 @@ fn main() {
     } else {
         run_serial_issuer();
     }
-    //run_merge_tx();
+    //run_aggregate_tx();
 }
 
 
@@ -65,8 +64,10 @@ impl Tx {
             if rnw_addr == coinbase {
                 continue;
             }
-            if rnw_addr == WETH_ADDR {
-                continue;
+            if cfg!(feature = "ignore_weth") {
+                if rnw_addr == WETH_ADDR {
+                    continue;
+                }
             }
             let hash = hasher::hash(rnw_addr);
             if !access_set.rnw_set.contains(&hash) {
@@ -98,7 +99,7 @@ impl Tx {
     }
 }
 
-fn merge_tx(tx_list: &Vec<Tx>) -> Vec<Vec<&Tx>> {
+fn aggregate_tx(tx_list: &Vec<Tx>) -> Vec<Vec<&Tx>> {
     let mut sender_list: Vec<&String> = Vec::with_capacity(tx_list.len());
     let mut sender_map: HashMap<&String, Vec<&Tx>> = HashMap::with_capacity(tx_list.len());
     for tx in tx_list.iter() {
@@ -119,7 +120,7 @@ fn merge_tx(tx_list: &Vec<Tx>) -> Vec<Vec<&Tx>> {
     result
 }
 
-pub fn run_merge_tx() {
+pub fn run_aggregate_tx() {
     let mut total_tx = 0;
     let mut total_task = 0;
     for id in (START_HEIGHT..END_HEIGHT).step_by(10) {
@@ -137,7 +138,7 @@ pub fn run_merge_tx() {
 
         for blk in blocks.iter() {
             total_tx += blk.tx_list.len();
-            let task_list = merge_tx(&blk.tx_list);
+            let task_list = aggregate_tx(&blk.tx_list);
             total_task += task_list.len();
         }
     }
@@ -157,22 +158,27 @@ struct User {
     location: String,
 }
 
+#[cfg(feature = "U128")]
+type UINT = u128;
+#[cfg(feature = "U64")]
+type UINT = u64;
+#[cfg(feature = "U32")]
+type UINT = u32;
 
-struct AccessSetList<T: PBElement> {
+struct AccessSetList {
     rdo_set_list: Vec<HashSet<[u8; 32]>>,
     rnw_set_list: Vec<HashSet<[u8; 32]>>,
-    _zero: T,
+    num_sets: usize,
 }
 
-impl<T: PBElement> AccessSetList<T> {
-    pub fn new() -> Self {
-        let len = T::BITS as usize;
+impl AccessSetList {
+    pub fn new(num_sets: usize) -> Self {
         let mut res = Self {
-            rdo_set_list: Vec::with_capacity(len),
-            rnw_set_list: Vec::with_capacity(len),
-            _zero: T::zero(),
+            rdo_set_list: Vec::with_capacity(num_sets),
+            rnw_set_list: Vec::with_capacity(num_sets),
+            num_sets,
         };
-        for _ in 0..len {
+        for _ in 0..num_sets {
             res.rdo_set_list.push(HashSet::new());
             res.rnw_set_list.push(HashSet::new());
         }
@@ -190,10 +196,10 @@ impl<T: PBElement> AccessSetList<T> {
     //pub rdo_set: HashSet<[u8; 32]>,
     //pub rnw_set: HashSet<[u8; 32]>,
 
-    pub fn get_dep_mask(&self, access_set: &AccessSet) -> T {
-        let mut result = T::zero();
-        let mut mask = T::one();
-        for idx in 0..(T::BITS as usize) {
+    pub fn get_dep_mask(&self, access_set: &AccessSet) -> UINT {
+        let mut result = 0 as UINT;
+        let mut mask = 1 as UINT;
+        for idx in 0..self.rnw_set_list.len() {
             for hash in access_set.rdo_set.iter() {
                 if self.rnw_set_list[idx].contains(hash) {
                     result = result | mask;
@@ -218,7 +224,7 @@ impl<T: PBElement> AccessSetList<T> {
     }
 
     pub fn clear_all(&mut self) {
-        for idx in 0..(T::BITS as usize) {
+        for idx in 0..self.rnw_set_list.len() {
             self.rdo_set_list[idx].clear();
             self.rnw_set_list[idx].clear();
         }
@@ -264,51 +270,50 @@ fn access_set_collide(a: &AccessSet, b: &AccessSet) -> bool {
     false
 }
 
-#[cfg(feature = "U128")]
-type UINT = u128;
-#[cfg(feature = "U64")]
-type UINT = u64;
-#[cfg(feature = "U32")]
-type UINT = u32;
-
-pub const BUNDLE_COUNT: usize = UINT::BITS as usize;
-
 #[cfg(feature = "bloomfilter")]
 struct Scheduler {
     pb: ParaBloom<UINT>,
     bundles: Vec<VecDeque<(String, AccessSet)>>,
+    num_sets: usize,
 }
 
 #[cfg(feature = "bloomfilter")]
 impl Scheduler {
     pub fn new() -> Scheduler {
-        let mut bundles = Vec::with_capacity(BUNDLE_COUNT);
-        for _ in 0..BUNDLE_COUNT {
+        let mut bundles = Vec::with_capacity(UINT::BITS);
+        for _ in 0..UINT::BITS {
             bundles.push(VecDeque::with_capacity(MAX_TASKS_LEN_IN_BUNDLE));
         }
         Scheduler {
             pb: ParaBloom::new(),
             bundles,
+            num_sets: UINT::BITS,
         }
     }
 }
 
-#[cfg(feature = "setlist")]
+#[cfg(not(feature = "bloomfilter"))]
 struct Scheduler {
-    pb: AccessSetList<UINT>,
+    pb: AccessSetList,
     bundles: Vec<VecDeque<(String, AccessSet)>>,
+    num_sets: usize,
 }
 
-#[cfg(feature = "setlist")]
+#[cfg(not(feature = "bloomfilter"))]
 impl Scheduler {
     pub fn new() -> Scheduler {
-        let mut bundles = Vec::with_capacity(BUNDLE_COUNT);
-        for _ in 0..BUNDLE_COUNT {
+        let mut num_sets = UINT::BITS as usize;
+        if cfg!(feature = "only_one_bundle") {
+            num_sets = 1;
+        }
+        let mut bundles = Vec::with_capacity(num_sets);
+        for _ in 0..num_sets {
             bundles.push(VecDeque::with_capacity(MAX_TASKS_LEN_IN_BUNDLE));
         }
         Scheduler {
-            pb: AccessSetList::new(),
+            pb: AccessSetList::new(num_sets),
             bundles,
+            num_sets,
         }
     }
 }
@@ -317,7 +322,7 @@ impl Scheduler {
     pub fn largest_bundle(&self) -> usize {
         let mut largest_size = 0;
         let mut largest_id = 0;
-        for i in 0..BUNDLE_COUNT {
+        for i in 0..self.num_sets {
             if self.bundles[i].len() > largest_size {
                 largest_size = self.bundles[i].len();
                 largest_id = i;
@@ -330,7 +335,7 @@ impl Scheduler {
         println!("AA flush_all");
         let mut bundle_set = AccessSet::new();
         let mut bundle_size = 0;
-        for bundle_id in 0..BUNDLE_COUNT {
+        for bundle_id in 0..self.num_sets {
             let target = self.bundles.get_mut(bundle_id).unwrap();
             while target.len() != 0 {
                 let (_txid, access_set) = target.pop_front().unwrap();
@@ -353,7 +358,7 @@ impl Scheduler {
         println!("AA BeginBundle size={}", target.len());
         while target.len() != 0 {
             let (txid, _access_set) = target.pop_front().unwrap();
-            //println!("{:?}", txid);
+            println!("{:?}", txid);
         }
         println!("EndBundle");
     }
@@ -364,7 +369,7 @@ impl Scheduler {
         let mut bundle_id = mask.trailing_ones() as usize;
         // if we cannot find a bundle to insert task because
         // it collides with all the bundles
-        if bundle_id == BUNDLE_COUNT {
+        if bundle_id == self.num_sets {
             bundle_id = self.largest_bundle();
             self.pb.clear(bundle_id);
             self.flush_bundle(bundle_id);
@@ -411,10 +416,9 @@ impl SerialIssuer {
             self.bundle_set.rnw_set.clear();
             self.bundle_size = 0;
             *total_bundle += 1;
-        } else {
-            merge_access_set(&mut self.bundle_set, &access_set, self.only_rnw);
-            self.bundle_size += 1;
         }
+        merge_access_set(&mut self.bundle_set, &access_set, self.only_rnw);
+        self.bundle_size += 1;
     }
 }
 
@@ -438,7 +442,11 @@ fn count_addr(blocks: &Vec<Block>) {
 }
 
 pub fn run_serial_issuer() -> (usize, usize) {
-    let mut serial_issuer = SerialIssuer::new(false);
+    let mut uni_set = false;
+    if cfg!(feature = "uni_set") {
+        uni_set = true;
+    }
+    let mut serial_issuer = SerialIssuer::new(uni_set);
     let mut total_tx = 0;
     let mut total_bundle = 0;
     for id in (START_HEIGHT..END_HEIGHT).step_by(10) {
@@ -497,8 +505,8 @@ pub fn run_scheduler() -> (usize, usize) {
             }
 
             total_tx += blk.tx_list.len();
-            if MAX_SET_SIZE > 1 {
-                let task_list = merge_tx(&blk.tx_list);
+            if MAX_TX_IN_TASK > 1 {
+                let task_list = aggregate_tx(&blk.tx_list);
                 for tx_vec in task_list.iter() {
                     let mut access_set = AccessSet::new();
                     let mut set_size = 0usize;
@@ -506,7 +514,7 @@ pub fn run_scheduler() -> (usize, usize) {
                     for tx in tx_vec.iter() {
                         tx.fill_access_set(&coinbase, &mut access_set);
                         set_size += 1;
-                        if set_size == MAX_SET_SIZE - 1 {
+                        if set_size == MAX_TX_IN_TASK - 1 {
                             let mut old = AccessSet::new();
                             mem::swap(&mut old, &mut access_set);
                             scheduler.add_access_set(txid.clone(), old, &mut total_bundle);

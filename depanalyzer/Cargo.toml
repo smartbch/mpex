@@ -13,11 +13,12 @@ revm = { version = "8", features = ["serde"] }
 
 [features]
 bloomfilter = []
-setlist = []
+only_one_bundle = []
 U32 = []
 U64 = []
 U128 = []
 reorder = []
-no_merge_tx = []
-merge_tx = []
+aggregate_tx = []
+uni_set = []
+ignore_weth = []
 
