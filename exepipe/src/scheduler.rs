@@ -56,17 +56,12 @@ type ParaBloom64 = ParaBloom<u64>;
 
 impl<T: PBElement> ParaBloom<T> {
     pub fn new() -> ParaBloom<T> {
-        let mut res = ParaBloom::<T> {
+        ParaBloom::<T> {
             rdo_arr: [T::zero(); BLOOM_BITS as usize],
             rnw_arr: [T::zero(); BLOOM_BITS as usize],
-            rdo_set_size: Vec::with_capacity(T::BITS as usize),
-            rnw_set_size: Vec::with_capacity(T::BITS as usize),
-        };
-        for _ in 0..T::BITS {
-            res.rdo_set_size.push(0);
-            res.rnw_set_size.push(0);
+            rdo_set_size: vec![0; T::BITS as usize],
+            rnw_set_size: vec![0; T::BITS as usize],
         }
-        res
     }
 
     fn get_rdo_mask(&self, mut k64: u64) -> T {
@@ -109,15 +104,15 @@ impl<T: PBElement> ParaBloom<T> {
         self.rnw_set_size[id] += 1;
     }
 
-    pub fn get_rdo_set_size(&self, id: usize) -> usize {
+    fn get_rdo_set_size(&self, id: usize) -> usize {
         return self.rdo_set_size[id];
     }
 
-    pub fn get_rnw_set_size(&self, id: usize) -> usize {
+    fn get_rnw_set_size(&self, id: usize) -> usize {
         return self.rnw_set_size[id];
     }
 
-    pub fn clear(&mut self, id: usize) {
+    fn clear(&mut self, id: usize) {
         let keep_mask = !(T::one() << id); //clear 'id', keep other bits
         for idx in 0..(BLOOM_BITS as usize) {
             self.rdo_arr[idx] = self.rdo_arr[idx] & keep_mask;
@@ -127,7 +122,7 @@ impl<T: PBElement> ParaBloom<T> {
         self.rnw_set_size[id] = 0;
     }
 
-    pub fn clear_all(&mut self) {
+    fn clear_all(&mut self) {
         for idx in 0..(BLOOM_BITS as usize) {
             self.rdo_arr[idx] = T::zero();
             self.rnw_arr[idx] = T::zero();
@@ -138,7 +133,7 @@ impl<T: PBElement> ParaBloom<T> {
         }
     }
 
-    pub fn get_dep_mask(&self, access_set: &AccessSet) -> T {
+    fn get_dep_mask(&self, access_set: &AccessSet) -> T {
         let mut mask = T::zero();
         // other.rdo vs self.rnw
         for &k64 in access_set.rdo_k64_vec.iter() {
@@ -152,7 +147,7 @@ impl<T: PBElement> ParaBloom<T> {
         mask
     }
 
-    pub fn add(&mut self, id: usize, access_set: &AccessSet) {
+    fn add(&mut self, id: usize, access_set: &AccessSet) {
         for &k64 in access_set.rdo_k64_vec.iter() {
             self.add_rdo_k64(id, k64);
         }
@@ -255,8 +250,8 @@ impl Scheduler {
         // now the task can be inserted into a bundle
         self.pb.add(bundle_id, &task.access_set);
 
-        let target = self.bundles.get_mut(bundle_id).unwrap();
-        target.push_back(task);
+        let bundle = self.bundles.get_mut(bundle_id).unwrap();
+        bundle.push_back(task);
 
         // ensuring bundle still has tasks when execute flush_all_bundle_tasks
         if is_last_task {
@@ -266,7 +261,7 @@ impl Scheduler {
         // flush the bundle if it's large enough
         if self.pb.get_rdo_set_size(bundle_id) > SET_MAX_SIZE
             || self.pb.get_rnw_set_size(bundle_id) > SET_MAX_SIZE
-            || target.len() >= MAX_TASKS_LEN_IN_BUNDLE
+            || bundle.len() >= MAX_TASKS_LEN_IN_BUNDLE
         {
             self.pb.clear(bundle_id);
             self.flush_bundle(bundle_id);

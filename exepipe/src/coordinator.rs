@@ -74,8 +74,8 @@ impl Coordinator {
     // after all_done_index is increased, try to issue new task for execution
     fn try_issue(&mut self, start: i32, end: i32) {
         for idx in start..end {
-            if let Some(min_all_done) = self.early_exe_map.get(&idx) {
-                if *min_all_done < start {
+            if let Some(&min_all_done) = self.early_exe_map.get(&idx) {
+                if min_all_done < start {
                     let blk_ctx = self.blk_ctx.clone();
                     let executed_sender = self.executed_sender.clone();
 
