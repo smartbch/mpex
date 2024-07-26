@@ -35,14 +35,14 @@ impl ExePipe {
         let (exec_sender, exec_recevier) = mpsc::sync_channel(8192);
         let scheduler = Scheduler::new(
             tpool.clone(),
-            schd_sender,
             blk_ctx.clone(),
+            schd_sender,
             exec_sender.clone(),
         );
         let coordinator = Some(Coordinator::new(
-            schd_receiver,
             tpool,
             blk_ctx,
+            schd_receiver,
             exec_sender,
             exec_recevier,
         ));

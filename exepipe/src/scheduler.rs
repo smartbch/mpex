@@ -185,8 +185,8 @@ pub struct Scheduler {
 impl Scheduler {
     pub fn new(
         tpool: Arc<ThreadPool>,
-        scheduled_chan: mpsc::SyncSender<EarlyExeInfo>,
         blk_ctx: Arc<BlockContext>,
+        scheduled_chan: mpsc::SyncSender<EarlyExeInfo>,
         executed_sender: mpsc::SyncSender<i32>,
     ) -> Scheduler {
         let mut bundles = Vec::with_capacity(BUNDLE_COUNT);
@@ -457,7 +457,7 @@ mod tests {
         let _tmp_dir = TempDir::new(dir);
         let (shared_ads_wrap, tpool, sender, _, s, _) = generate_ads_wrap(dir);
         let blk_ctx = Arc::new(BlockContext::new(shared_ads_wrap));
-        let scheduler = Scheduler::new(tpool, sender, blk_ctx.clone(), s);
+        let scheduler = Scheduler::new(tpool, blk_ctx.clone(), sender, s);
 
         assert_eq!(scheduler.height, 0);
         assert_eq!(scheduler.out_idx, 0);
@@ -473,7 +473,7 @@ mod tests {
         let _tmp_dir = TempDir::new(dir);
         let (shared_ads_wrap, tpool, sender, _, s, _) = generate_ads_wrap(dir);
         let blk_ctx = Arc::new(BlockContext::new(shared_ads_wrap));
-        let mut scheduler = Scheduler::new(tpool, sender, blk_ctx.clone(), s);
+        let mut scheduler = Scheduler::new(tpool, blk_ctx.clone(), sender, s);
 
         scheduler.start_new_block(1, blk_ctx.clone());
 
@@ -490,7 +490,7 @@ mod tests {
         let _tmp_dir = TempDir::new(dir);
         let (shared_ads_wrap, tpool, sender, _, s, _) = generate_ads_wrap(dir);
         let blk_ctx = Arc::new(BlockContext::new(shared_ads_wrap));
-        let mut scheduler = Scheduler::new(tpool, sender, blk_ctx.clone(), s);
+        let mut scheduler = Scheduler::new(tpool, blk_ctx.clone(), sender, s);
 
         scheduler.start_new_block(1, blk_ctx.clone());
 
@@ -523,7 +523,7 @@ mod tests {
         let _tmp_dir = TempDir::new(dir);
         let (shared_ads_wrap, tpool, sender, _, s, _) = generate_ads_wrap(dir);
         let blk_ctx = Arc::new(BlockContext::new(shared_ads_wrap));
-        let mut scheduler = Scheduler::new(tpool, sender, blk_ctx.clone(), s);
+        let mut scheduler = Scheduler::new(tpool, blk_ctx.clone(), sender, s);
         scheduler.start_new_block(1, blk_ctx.clone());
 
         {
@@ -564,7 +564,7 @@ mod tests {
         );
 
         let blk_ctx = Arc::new(blk_ctx);
-        let mut scheduler = Scheduler::new(tpool, sender, blk_ctx.clone(), s);
+        let mut scheduler = Scheduler::new(tpool, blk_ctx.clone(), sender, s);
         scheduler.start_new_block(1, blk_ctx);
 
         for _ in 0..BUNDLE_COUNT {
@@ -671,7 +671,7 @@ mod tests {
         );
 
         let blk_ctx = Arc::new(blk_ctx);
-        let mut scheduler = Scheduler::new(tpool, sender, blk_ctx.clone(), s);
+        let mut scheduler = Scheduler::new(tpool, blk_ctx.clone(), sender, s);
         scheduler.start_new_block(1, blk_ctx);
 
         let mut tx = TxEnv::default();
@@ -707,7 +707,7 @@ mod tests {
         );
 
         let blk_ctx = Arc::new(blk_ctx);
-        let mut scheduler = Scheduler::new(tpool, sender, blk_ctx.clone(), s);
+        let mut scheduler = Scheduler::new(tpool, blk_ctx.clone(), sender, s);
         scheduler.start_new_block(1, blk_ctx);
 
         let task_in: Vec<ExeTask> = (0..MAX_TASKS_LEN_IN_BUNDLE)

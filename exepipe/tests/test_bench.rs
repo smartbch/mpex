@@ -60,12 +60,12 @@ mod tests {
         let task_manager = Arc::new(TasksManager::new(task_list, i64::MAX));
         blk_ctx.start_new_block(task_manager, BlockEnv::default());
         let blk_ctx = Arc::new(blk_ctx);
-        let mut scheduler = Scheduler::new(tpool.clone(), sender, blk_ctx.clone(), s.clone());
+        let mut scheduler = Scheduler::new(tpool.clone(), blk_ctx.clone(), sender, s.clone());
         scheduler.start_new_block(1, blk_ctx.clone());
         let mut coordinator = Box::new(Coordinator::new(
-            receivers,
             tpool.clone(),
             blk_ctx.clone(),
+            receivers,
             s,
             r,
         ));
@@ -106,12 +106,12 @@ mod tests {
         let task_manager = Arc::new(TasksManager::new(task_list, i64::MAX));
         blk_ctx.start_new_block(task_manager, BlockEnv::default());
         let blk_ctx = Arc::new(blk_ctx);
-        let mut scheduler = Scheduler::new(tpool.clone(), sender, blk_ctx.clone(), s.clone());
+        let mut scheduler = Scheduler::new(tpool.clone(), blk_ctx.clone(), sender, s.clone());
         scheduler.start_new_block(1, blk_ctx.clone());
         let mut coordinator = Box::new(Coordinator::new(
-            receivers,
             tpool.clone(),
             blk_ctx.clone(),
+            receivers,
             s,
             r,
         ));
@@ -160,12 +160,12 @@ mod tests {
         let task_manager = Arc::new(TasksManager::new(task_list, i64::MAX));
         blk_ctx.start_new_block(task_manager, BlockEnv::default());
         let blk_ctx = Arc::new(blk_ctx);
-        let mut scheduler = Scheduler::new(tpool.clone(), sender, blk_ctx.clone(), s.clone());
+        let mut scheduler = Scheduler::new(tpool.clone(), blk_ctx.clone(), sender, s.clone());
         scheduler.start_new_block(1, blk_ctx.clone());
         let mut coordinator = Box::new(Coordinator::new(
-            receivers,
             tpool.clone(),
             blk_ctx.clone(),
+            receivers,
             s,
             r,
         ));

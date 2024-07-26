@@ -105,7 +105,7 @@ mod tests {
         );
 
         let blk_ctx = Arc::new(blk_ctx);
-        let mut scheduler = Scheduler::new(tpool, sender, blk_ctx.clone(), s.clone());
+        let mut scheduler = Scheduler::new(tpool, blk_ctx.clone(), sender, s.clone());
         scheduler.start_new_block(1, blk_ctx);
 
         let flush_count = Arc::new(Mutex::new(0));

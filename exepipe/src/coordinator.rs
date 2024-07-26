@@ -26,9 +26,9 @@ pub struct Coordinator {
 
 impl Coordinator {
     pub fn new(
-        scheduled_chan: mpsc::Receiver<EarlyExeInfo>,
         tpool: Arc<ThreadPool>,
         blk_ctx: Arc<BlockContext>,
+        scheduled_chan: mpsc::Receiver<EarlyExeInfo>,
         executed_sender: mpsc::SyncSender<i32>,
         executed_receiver: mpsc::Receiver<i32>,
     ) -> Coordinator {
@@ -149,7 +149,7 @@ mod tests {
         let _tmp_dir = TempDir::new(dir);
         let (shared_ads_wrap, tpool, _sender, receiver, s, r) = generate_ads_wrap(dir);
         let blk_ctx = Arc::new(BlockContext::new(shared_ads_wrap));
-        let coordinator = Coordinator::new(receiver, tpool.clone(), blk_ctx.clone(), s, r);
+        let coordinator = Coordinator::new(tpool.clone(), blk_ctx.clone(), receiver, s, r);
 
         assert_eq!(coordinator.all_done_index, -1);
         assert_eq!(coordinator.height, 0);
@@ -164,7 +164,7 @@ mod tests {
         let _tmp_dir = TempDir::new(dir);
         let (shared_ads_wrap, tpool, _sender, receiver, s, r) = generate_ads_wrap(dir);
         let blk_ctx = Arc::new(BlockContext::new(shared_ads_wrap));
-        let mut coordinator = Coordinator::new(receiver, tpool.clone(), blk_ctx.clone(), s, r);
+        let mut coordinator = Coordinator::new(tpool.clone(), blk_ctx.clone(), receiver, s, r);
 
         coordinator.start_new_block(1, blk_ctx.clone());
 
@@ -180,7 +180,7 @@ mod tests {
         let _tmp_dir = TempDir::new(dir);
         let (shared_ads_wrap, tpool, sender, receiver, s, r) = generate_ads_wrap(dir);
         let blk_ctx = Arc::new(BlockContext::new(shared_ads_wrap));
-        let mut coordinator = Coordinator::new(receiver, tpool.clone(), blk_ctx.clone(), s, r);
+        let mut coordinator = Coordinator::new(tpool.clone(), blk_ctx.clone(), receiver, s, r);
 
         let early_exe_info = EarlyExeInfo {
             my_idx: 1,
@@ -201,7 +201,7 @@ mod tests {
         let _tmp_dir = TempDir::new(dir);
         let (shared_ads_wrap, tpool, _sender, receiver, s, r) = generate_ads_wrap(dir);
         let blk_ctx = Arc::new(BlockContext::new(shared_ads_wrap));
-        let mut coordinator = Coordinator::new(receiver, tpool.clone(), blk_ctx.clone(), s, r);
+        let mut coordinator = Coordinator::new(tpool.clone(), blk_ctx.clone(), receiver, s, r);
 
         coordinator.executed_sender.send(1).unwrap();
 
@@ -236,7 +236,7 @@ mod tests {
             Arc::new(TasksManager::new(tasks, i64::MAX)),
             BlockEnv::default(),
         );
-        let mut coordinator = Coordinator::new(receiver, tpool.clone(), Arc::new(blk_ctx), s, r);
+        let mut coordinator = Coordinator::new(tpool.clone(), Arc::new(blk_ctx), receiver, s, r);
 
         coordinator.early_exe_map.insert(2, 1);
 
@@ -281,9 +281,9 @@ mod tests {
             BlockEnv::default(),
         );
         let mut coordinator = Box::new(Coordinator::new(
-            receivers,
             tpool.clone(),
             Arc::new(blk_ctx),
+            receivers,
             s,
             r,
         ));
@@ -323,9 +323,9 @@ mod tests {
             BlockEnv::default(),
         );
         let mut coordinator = Box::new(Coordinator::new(
-            receivers,
             tpool.clone(),
             Arc::new(blk_ctx),
+            receivers,
             s,
             r,
         ));
