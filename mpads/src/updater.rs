@@ -207,7 +207,10 @@ impl Updater {
             old_pos >= 0 // break if old_pos was assigned
         });
         if old_pos < 0 {
-            panic!("Write to non-exist key");
+            panic!(
+                "Write to non-exist key shard_id={} key={:?} key_hash={:?}",
+                self.shard_id, key, key_hash
+            );
         }
         let old_entry = EntryBz {
             bz: &self.read_entry_buf[..],
