@@ -25,6 +25,7 @@ pub mod twig;
 pub mod twigfile;
 pub mod updater;
 pub mod utils;
+pub mod stackmachine;
 
 // for test
 pub mod test_helper;

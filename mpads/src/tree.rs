@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
-use std::mem;
 use std::sync::Arc;
+use std::{fmt, mem};
 use std::{fs, thread};
 
 use crate::def::{
@@ -38,7 +38,7 @@ use crate::{proof, twigfile};
  8 9   a b     c d   e f
 */
 
-#[derive(Debug, Copy, Clone, Eq, Hash, PartialEq)]
+#[derive(Copy, Clone, Eq, Hash, PartialEq)]
 pub struct NodePos(u64);
 
 impl NodePos {
@@ -56,6 +56,18 @@ impl NodePos {
     }
     pub fn as_u64(&self) -> u64 {
         self.0
+    }
+}
+
+impl fmt::Debug for NodePos {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "NodePos: {:?} {{ level: {}, nth: {} }}",
+            self.as_u64(),
+            self.level(),
+            self.nth()
+        )
     }
 }
 
