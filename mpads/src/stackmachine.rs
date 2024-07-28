@@ -1,6 +1,5 @@
-use std::{collections::HashMap, hash::Hash};
-
 use rand_core::le;
+use std::{collections::HashMap, hash::Hash};
 
 use crate::tree::NodePos;
 
@@ -61,12 +60,33 @@ impl StackMachine {
         post_map: HashMap<NodePos, [u8; 32]>,
         max_level: u64,
     ) -> Self {
-        StackMachine {
+        let mut machine = StackMachine {
             pre_map,
             post_map,
             stack: Vec::new(),
             max_level,
+        };
+        machine.clear_map();
+        machine
+    }
+
+    fn clear_map(&mut self) {
+        let nth_arr_at_level0: Vec<u64> = self
+            .pre_map
+            .keys()
+            .filter(|pos| pos.level() == 0)
+            .enumerate()
+            .map(|(_, key)| key.nth()) // Assuming you want to collect the keys
+            .collect();
+        for nth in nth_arr_at_level0 {
+            for level in 1..self.max_level {
+                self.pre_map
+                    .remove(&NodePos::pos(level, nth / u64::pow(2, level as u32)));
+                self.post_map
+                    .remove(&NodePos::pos(level, nth / u64::pow(2, level as u32)));
+            }
         }
+        println!("pre_map: {:?}", self.pre_map);
     }
 
     fn combine(&mut self) {
@@ -76,6 +96,7 @@ impl StackMachine {
 
         let right = self.stack.pop().unwrap();
         let left = self.stack.pop().unwrap();
+        println!("combine: {:?} + {:?}", left.node_pos, right.node_pos);
 
         if get_sibling_pos(&left.node_pos) != right.node_pos {
             panic!("siblings can't combine");
@@ -104,64 +125,65 @@ impl StackMachine {
         }
     }
 
-    fn push_by_node_pos(&mut self, node_pos: NodePos) {
-        let pre_value = self.pre_map.remove(&node_pos).unwrap();
-        let post_value = self.post_map.remove(&node_pos).unwrap_or(pre_value);
+    fn push_by_node_pos(&mut self, node_pos: &NodePos) {
+        let pre_value = self.pre_map.remove(node_pos).unwrap();
+        let post_value = self.post_map.remove(node_pos).unwrap_or(pre_value);
         let triple = Triple {
             old_value: format!("{:?}", pre_value),
             new_value: format!("{:?}", post_value),
-            node_pos: node_pos,
+            node_pos: node_pos.clone(),
         };
         self.stack.push(triple);
     }
 
-    fn make_stack_or_execute(&mut self) -> Result<(), &'static str> {
-        let cur_triple = self.stack.last().unwrap();
-        // println!(
-        //     "execute_node start-----cur_triple : {:?}",
-        //     cur_triple.node_pos
-        // );
+    fn make_stack_or_execute(&mut self, _target_node_pos: &NodePos) -> Result<(), &'static str> {
+        let mut target_node_pos = _target_node_pos.clone();
+        loop {
+            // println!("loop: {:?}", target_node_pos);
 
-        // Has got to the root
-        if cur_triple.node_pos.level() == self.max_level - 1 {
-            return Ok(());
-        }
-
-        let sibling_pos = get_sibling_pos(&cur_triple.node_pos);
-        // println!("sibling_pos : {:?}", sibling_pos);
-
-        // last two elements have the same parent
-        if let Some(triple) = self.stack.get(self.stack.len().wrapping_sub(2)) {
-            if sibling_pos == triple.node_pos {
-                println!(
-                    "----------execute_node: combine {:?} {:?}",
-                    sibling_pos, cur_triple.node_pos
-                );
-                self.combine();
-                self.make_stack_or_execute()?;
-                return Ok(());
+            let mut last_triple_node_pos = NodePos::new(u64::MAX);
+            if let Some(triple) = self.stack.last() {
+                last_triple_node_pos = triple.node_pos.clone();
             }
-        }
 
-        if sibling_pos.level() != 0 {
-            let children = get_children_pos_list(&sibling_pos);
-            //  use children to calculate
-            if let Some(_) = self.pre_map.get(&children.0) {
-                // println!("execute_node: 2");
-                self.push_by_node_pos(children.0);
-                self.make_stack_or_execute()?;
-                return Ok(());
+            // Has got to the root
+            if last_triple_node_pos.level() == self.max_level - 1 {
+                break;
             }
-        }
 
-        // println!("execute_node: 3");
-        // find sibling then combine
-        self.push_by_node_pos(sibling_pos);
-        self.make_stack_or_execute()?;
-        return Ok(());
+            // can combine
+            if let Some(triple) = self.stack.get(self.stack.len().wrapping_sub(2)) {
+                if get_sibling_pos(&triple.node_pos) == last_triple_node_pos {
+                    // println!("combine!!!!!!!!");
+                    self.combine();
+                    target_node_pos = self.stack.last().unwrap().node_pos.clone();
+                    continue;
+                }
+            }
+
+            // need push sibling to stack
+            if self.pre_map.contains_key(&target_node_pos)
+                || last_triple_node_pos == target_node_pos
+            {
+                // println!("sibling");
+                if self.pre_map.contains_key(&target_node_pos) {
+                    self.push_by_node_pos(&target_node_pos);
+                }
+                let sibling = get_sibling_pos(&target_node_pos);
+                target_node_pos = sibling;
+                continue;
+            }
+
+            // calc target from children
+            // println!("children");
+            let children = get_children_pos_list(&target_node_pos);
+            target_node_pos = children.0.clone();
+            continue;
+        }
+        Ok(())
     }
 
-    fn run(&mut self) -> Triple {
+    pub fn run(&mut self) -> Triple {
         let min_left_node_nth_at_level0 = self
             .pre_map
             .keys()
@@ -169,8 +191,7 @@ impl StackMachine {
             .map(|pos| pos.nth())
             .min()
             .unwrap();
-        self.push_by_node_pos(NodePos::pos(0, min_left_node_nth_at_level0));
-        let _ = self.make_stack_or_execute();
+        let _ = self.make_stack_or_execute(&NodePos::pos(0, min_left_node_nth_at_level0));
         self.stack.pop().unwrap()
     }
 }
