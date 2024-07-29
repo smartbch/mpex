@@ -122,7 +122,7 @@ impl<T: ADS> BlockContext<T> {
         mut idx: isize,
     ) -> RwLockReadGuard<Option<Vec<Result<ResultAndState, anyhow::Error>>>> {
         if idx < 0 {
-            idx = self.results.len() as isize - idx;
+            idx = self.results.len() as isize + idx;
         }
         self.results[idx as usize].read().unwrap()
     }
