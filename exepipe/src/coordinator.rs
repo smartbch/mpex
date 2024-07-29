@@ -136,6 +136,7 @@ mod tests {
 
     use mpads::{tasksmanager::TasksManager, test_helper::TempDir};
     use revm::primitives::{BlockEnv, TxEnv};
+    use serial_test::serial;
 
     use crate::{
         context::BlockContext, coordinator::Coordinator, exetask::ExeTask, scheduler::EarlyExeInfo,
@@ -143,7 +144,7 @@ mod tests {
     };
 
     #[test]
-    #[serial_test::serial]
+    #[serial]
     fn test_new_coordinator() {
         let dir = "./tmp_ads";
         let _tmp_dir = TempDir::new(dir);
@@ -158,7 +159,7 @@ mod tests {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial]
     fn test_start_new_block() {
         let dir = "./tmp_ads";
         let _tmp_dir = TempDir::new(dir);
@@ -174,7 +175,7 @@ mod tests {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial]
     fn test_read_from_scheduled_chan() {
         let dir = "./tmp_ads";
         let _tmp_dir = TempDir::new(dir);
@@ -195,7 +196,7 @@ mod tests {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial]
     fn test_read_from_executed_chan() {
         let dir = "./tmp_ads";
         let _tmp_dir = TempDir::new(dir);
@@ -212,7 +213,7 @@ mod tests {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial]
     fn test_try_issue() {
         let dir = "./tmp_ads";
         let _tmp_dir = TempDir::new(dir);
@@ -253,7 +254,7 @@ mod tests {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial]
     fn test_run() {
         let dir = "./tmp_ads";
         let _tmp_dir = TempDir::new(dir);
@@ -311,7 +312,7 @@ mod tests {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial]
     fn test_run_when_zero_task_in() {
         let dir = "./tmp_ads";
         let _tmp_dir = TempDir::new(dir);
