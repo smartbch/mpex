@@ -46,6 +46,12 @@ impl NodePos {
         NodePos(pos)
     }
     pub fn pos(level: u64, n: u64) -> NodePos {
+        if level >= u8::MAX as u64 {
+            panic!("level is too large");
+        }
+        if n >= (1 << 56) {
+            panic!("n is too large");
+        }
         NodePos((level << 56) | n)
     }
     pub fn level(&self) -> u64 {
@@ -817,6 +823,108 @@ impl Tree {
         path.right_of_twig = proof::get_right_path(twig, active_bits, sn);
 
         path
+    }
+
+    pub fn get_proof_map(&self, sn: u64, proof_map: &mut HashMap<NodePos, [u8; 32]>) -> i64 {
+        let twig_id = sn >> TWIG_SHIFT;
+        let max_level_of_left_of_twig = 12;
+
+        // left of twig
+        let mut mtree_idx_and_node_pos = vec![];
+        let nth_at_level0 = sn & TWIG_MASK as u64;
+        mtree_idx_and_node_pos.push((2048 + nth_at_level0, NodePos::pos(0, nth_at_level0 as u64)));
+        for level in 0..(max_level_of_left_of_twig - 1) {
+            let nth = (nth_at_level0 >> 0) as usize;
+            let peer_nth = nth ^ 1;
+            let stride = 2048 >> level;
+            let node_pos = NodePos::pos(level, peer_nth as u64);
+            if proof_map.contains_key(&node_pos) {
+                continue;
+            }
+            mtree_idx_and_node_pos.push((
+                stride + peer_nth as u64,
+                NodePos::pos(level, peer_nth as u64),
+            ));
+        }
+        let is_youngest_twig_id = twig_id == self.youngest_twig_id;
+        let mut cache: HashMap<i64, [u8; 32]> = HashMap::with_capacity(8);
+        for (idx, pos) in mtree_idx_and_node_pos {
+            let mut hash = [0u8; 32];
+            if is_youngest_twig_id {
+                hash = self.mtree_for_youngest_twig[idx as usize];
+            } else {
+                self.twig_file_wr
+                    .twig_file
+                    .get_hash_node(twig_id, idx as i64, &mut cache, &mut hash);
+            }
+            proof_map.insert(pos, hash);
+        }
+
+        // right of twig
+        let (s, k) = get_shard_idx_and_key(twig_id);
+        let active_bits = self.active_bit_shards[s]
+            .get(&k)
+            .unwrap_or(&twig::NULL_ACTIVE_BITS);
+
+        let mut nth_at_level0 = sn & TWIG_MASK as u64;
+        nth_at_level0 = nth_at_level0 / 256;
+        // add self
+        let hash = active_bits.get_bits(nth_at_level0 as usize, 32);
+        proof_map.insert(NodePos::pos(8, 8 + nth_at_level0), hash.try_into().unwrap());
+        // add peer
+        let peer_nth_at_level0 = nth_at_level0 ^ 1;
+        let hash = active_bits.get_bits(peer_nth_at_level0 as usize, 32);
+        proof_map.insert(
+            NodePos::pos(8, 8 + peer_nth_at_level0),
+            hash.try_into().unwrap(),
+        );
+        // add parent peer
+        let twig = self.upper_tree.active_twig_shards[s]
+            .get(&k)
+            .unwrap_or(&twig::NULL_TWIG);
+        println!(
+            "twig_{} left_root: {:?} twig_root: {:?}",
+            twig_id, twig.left_root, twig.twig_root
+        );
+        let nth = (nth_at_level0 >> 1) ^ 1;
+        let hash = twig.active_bits_mtl1[nth as usize];
+        proof_map.insert(NodePos::pos(9, 4 + nth), hash.try_into().unwrap());
+        // add parent'parent peer
+        let nth = (nth_at_level0 >> 2) ^ 1;
+        let hash = twig.active_bits_mtl2[nth as usize];
+        proof_map.insert(NodePos::pos(10, 2 + nth), hash.try_into().unwrap());
+
+        // upper tree
+        let max_level = calc_max_level(self.youngest_twig_id);
+        let mut peer_hash = [0u8; 32];
+        let peer_twig_nth = twig_id ^ 1;
+        if let Some(v) = self.upper_tree.get_twig_root(peer_twig_nth) {
+            peer_hash.copy_from_slice(v);
+        } else {
+            peer_hash.copy_from_slice(&twig::NULL_TWIG.twig_root[..]);
+        }
+        // add peer twig root
+        proof_map.insert(NodePos::pos(12, peer_twig_nth as u64), peer_hash);
+        // add ancestor
+        let mut upper_peer_nth = twig_id >> 1;
+        for level in FIRST_LEVEL_ABOVE_TWIG..max_level {
+            upper_peer_nth = upper_peer_nth ^ 1;
+            let hash = self
+                .upper_tree
+                .get_node(NodePos::pos(level as u64, upper_peer_nth))
+                .unwrap();
+            proof_map.insert(NodePos::pos(level as u64, upper_peer_nth as u64), *hash);
+            upper_peer_nth = upper_peer_nth >> 1;
+        }
+
+        println!(
+            "root: {:?}",
+            self.upper_tree
+                .get_node(NodePos::pos(max_level as u64, 0))
+                .unwrap()
+        );
+
+        max_level
     }
 }
 

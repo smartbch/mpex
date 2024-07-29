@@ -1,12 +1,12 @@
 use rand_core::le;
 use std::{collections::HashMap, hash::Hash};
 
-use crate::tree::NodePos;
+use crate::{tree::NodePos, utils::hasher::hash2};
 
 #[derive(Debug, Clone)]
 struct Triple {
-    old_value: String,
-    new_value: String,
+    old_value: [u8; 32],
+    new_value: [u8; 32],
     node_pos: NodePos,
 }
 
@@ -76,7 +76,7 @@ impl StackMachine {
             .keys()
             .filter(|pos| pos.level() == 0)
             .enumerate()
-            .map(|(_, key)| key.nth()) // Assuming you want to collect the keys
+            .map(|(_, key)| key.nth())
             .collect();
         for nth in nth_arr_at_level0 {
             for level in 1..self.max_level {
@@ -86,7 +86,7 @@ impl StackMachine {
                     .remove(&NodePos::pos(level, nth / u64::pow(2, level as u32)));
             }
         }
-        println!("pre_map: {:?}", self.pre_map);
+        // println!("pre_map: {:?}", self.pre_map);
     }
 
     fn combine(&mut self) {
@@ -97,6 +97,7 @@ impl StackMachine {
         let right = self.stack.pop().unwrap();
         let left = self.stack.pop().unwrap();
         println!("combine: {:?} + {:?}", left.node_pos, right.node_pos);
+        // println!("combine: {:?} + {:?}", left.old_value, right.old_value);
 
         if get_sibling_pos(&left.node_pos) != right.node_pos {
             panic!("siblings can't combine");
@@ -104,8 +105,10 @@ impl StackMachine {
 
         let parent_pos = get_parent_pos(&right.node_pos);
 
-        let combined_old_value = format!("H({}+{})", left.old_value, right.old_value);
-        let combined_new_value = format!("H({}+{})", left.new_value, right.new_value);
+        let combined_old_value =
+            hash2(left.node_pos.level() as u8, left.old_value, right.old_value);
+        let combined_new_value =
+            hash2(left.node_pos.level() as u8, left.new_value, right.new_value);
 
         let parent = Triple {
             old_value: combined_old_value,
@@ -129,8 +132,8 @@ impl StackMachine {
         let pre_value = self.pre_map.remove(node_pos).unwrap();
         let post_value = self.post_map.remove(node_pos).unwrap_or(pre_value);
         let triple = Triple {
-            old_value: format!("{:?}", pre_value),
-            new_value: format!("{:?}", post_value),
+            old_value: pre_value,
+            new_value: post_value,
             node_pos: node_pos.clone(),
         };
         self.stack.push(triple);
@@ -147,7 +150,7 @@ impl StackMachine {
             }
 
             // Has got to the root
-            if last_triple_node_pos.level() == self.max_level - 1 {
+            if last_triple_node_pos.level() == self.max_level {
                 break;
             }
 
@@ -200,27 +203,32 @@ impl StackMachine {
 mod compare_tests {
     use std::collections::HashMap;
 
-    use crate::tree::NodePos;
+    use crate::{
+        check,
+        def::TWIG_MASK,
+        test_helper::{self, build_test_tree, TempDir},
+        tree::NodePos,
+    };
 
     use super::StackMachine;
 
     #[test]
     fn test1() {
-        let twig_of_left_max_level = 4;
+        let twig_of_left_max_level = 3;
 
         let mut pre_map = HashMap::<NodePos, [u8; 32]>::new();
 
         // origin entry
         pre_map.insert(NodePos::pos(0, 0), [0; 32]);
-        for level in 0..twig_of_left_max_level - 1 {
+        for level in 0..twig_of_left_max_level {
             pre_map.insert(NodePos::pos(level, 1), [0; 32]);
         }
         // origin entry
-        let level0_stride = 1 << twig_of_left_max_level - 1;
+        let level0_stride = 1 << twig_of_left_max_level;
         // every level start from 0
         pre_map.insert(NodePos::pos(0, level0_stride - 1), [0; 32]);
-        for level in 0..twig_of_left_max_level - 1 {
-            let stride = 1 << twig_of_left_max_level - level - 1;
+        for level in 0..twig_of_left_max_level {
+            let stride = 1 << twig_of_left_max_level - level;
             pre_map.insert(NodePos::pos(level, stride - 1 - 1), [0; 32]);
         }
 
@@ -231,5 +239,32 @@ mod compare_tests {
         let mut machine = StackMachine::new(pre_map, post_map, twig_of_left_max_level);
         let root = machine.run();
         println!("root: {:?}", root);
+    }
+
+    #[test]
+    fn test2() {
+        let dir_name = "./DataTree";
+        let _tmp_dir = TempDir::new(dir_name);
+
+        let deact_sn_list: Vec<u64> = (0..2048)
+            .chain(vec![5000, 5500, 5700, 5813, 6001])
+            .collect();
+
+        let (mut tree, _, _) =
+            build_test_tree(dir_name, &deact_sn_list, TWIG_MASK as i32 * 4, 1600);
+        let n_list = tree.flush_files(0, 0);
+        let n_list = tree.upper_tree.evict_twigs(n_list, 0, 0);
+
+        tree.upper_tree
+            .sync_upper_nodes(n_list, tree.youngest_twig_id);
+        check::check_hash_consistency(&tree);
+
+        let mut pre_map = HashMap::<NodePos, [u8; 32]>::new();
+        let max_level = tree.get_proof_map(0, &mut pre_map);
+        // println!("pre_map: {:?}", pre_map.keys());
+
+        let mut machine = StackMachine::new(pre_map, HashMap::new(), max_level as u64);
+        let root = machine.run();
+        println!("root: {:?}", root,);
     }
 }
