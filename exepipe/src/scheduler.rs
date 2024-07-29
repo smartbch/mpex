@@ -546,7 +546,7 @@ mod tests {
 
     #[test]
     #[serial]
-    fn test_add_task_collide_with_all_bundls() {
+    fn test_add_task_collide_with_all_bundles() {
         let dir = "./tmp_ads";
         let _tmp_dir = TempDir::new(dir);
         let (shared_ads_wrap, tpool, sender, receiver, s, r) = generate_ads_wrap(dir);
@@ -689,6 +689,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_add_tasks() {
         let dir = "./tmp_ads";
         let _tmp_dir = TempDir::new(dir);
