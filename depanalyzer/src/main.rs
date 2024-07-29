@@ -549,7 +549,7 @@ pub fn run_scheduler() -> (usize, usize) {
 pub fn test_scheduler_speed() {
     let mut scheduler = Scheduler::new();
     let mut all_access_sets: VecDeque<(String, Box<AccessSet>)> = VecDeque::new();
-    for id in (START_HEIGHT..START_HEIGHT+800).step_by(10) {
+    for id in (START_HEIGHT..START_HEIGHT+3000).step_by(10) {
         let mut file = OpenOptions::new()
             .read(true)
             .open(format!(

@@ -104,15 +104,15 @@ impl<T: PBElement> ParaBloom<T> {
         self.rnw_set_size[id] += 1;
     }
 
-    fn get_rdo_set_size(&self, id: usize) -> usize {
+    pub fn get_rdo_set_size(&self, id: usize) -> usize {
         return self.rdo_set_size[id];
     }
 
-    fn get_rnw_set_size(&self, id: usize) -> usize {
+    pub fn get_rnw_set_size(&self, id: usize) -> usize {
         return self.rnw_set_size[id];
     }
 
-    fn clear(&mut self, id: usize) {
+    pub fn clear(&mut self, id: usize) {
         let keep_mask = !(T::one() << id); //clear 'id', keep other bits
         for idx in 0..(BLOOM_BITS as usize) {
             self.rdo_arr[idx] = self.rdo_arr[idx] & keep_mask;
@@ -122,7 +122,7 @@ impl<T: PBElement> ParaBloom<T> {
         self.rnw_set_size[id] = 0;
     }
 
-    fn clear_all(&mut self) {
+    pub fn clear_all(&mut self) {
         for idx in 0..(BLOOM_BITS as usize) {
             self.rdo_arr[idx] = T::zero();
             self.rnw_arr[idx] = T::zero();
@@ -133,7 +133,7 @@ impl<T: PBElement> ParaBloom<T> {
         }
     }
 
-    fn get_dep_mask(&self, access_set: &AccessSet) -> T {
+    pub fn get_dep_mask(&self, access_set: &AccessSet) -> T {
         let mut mask = T::zero();
         // other.rdo vs self.rnw
         for &k64 in access_set.rdo_k64_vec.iter() {
@@ -147,7 +147,7 @@ impl<T: PBElement> ParaBloom<T> {
         mask
     }
 
-    fn add(&mut self, id: usize, access_set: &AccessSet) {
+    pub fn add(&mut self, id: usize, access_set: &AccessSet) {
         for &k64 in access_set.rdo_k64_vec.iter() {
             self.add_rdo_k64(id, k64);
         }

@@ -49,6 +49,6 @@ If you want to change the number from 64 to 32 or 128, just change the "U64" fea
 We recommend to use the bloomfilter-based scheduler in production, because it is the most efficient. To test its speed, use the following command:
 
 ```
-cargo run --features reorder,ignore_weth,bloomfilter,U64,test_speed
+cargo run --release --features reorder,ignore_weth,bloomfilter,U64,test_speed
 ```
 
