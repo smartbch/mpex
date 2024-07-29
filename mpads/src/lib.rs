@@ -14,18 +14,19 @@ pub mod flusher;
 pub mod hpfile;
 pub mod indexer;
 pub mod metadb;
+pub mod multiproof;
 pub mod prefetcher;
 pub mod proof;
 pub mod recover;
 pub mod refdb;
 pub mod rocksdb;
+pub mod stackmachine;
 pub mod tasksmanager;
 pub mod tree;
 pub mod twig;
 pub mod twigfile;
 pub mod updater;
 pub mod utils;
-pub mod stackmachine;
 
 // for test
 pub mod test_helper;
