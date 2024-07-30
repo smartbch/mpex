@@ -75,10 +75,10 @@ In our experiments, we found that the WETH contract is the most significant fact
 
 We analyzed 747,272 transactions in blocks between 20338950 and 20343510 and analyzed the average sizes of the bundles obtained under different conditions. The results are as follows:
 
-- KeepWETH/OnlyRnW：2.65
-- KeepWETH/RdO+RnW：3.23
-- IgnoreWETH/OnlyRnW：3.32
-- IgnoreWETH/RdO+RnW：5.80
+- KeepWETH/OnlyRnW：2.69
+- KeepWETH/RdO+RnW：3.29
+- IgnoreWETH/OnlyRnW：3.40
+- IgnoreWETH/RdO+RnW：6.01
 
 IgnoreWETH indicates excluding the balance-change operations of the WETH contract from WriteSet, and KeepWETH indicates that they are not excluded. RdO+RnW indicates that ReadSet and WriteSet are seperated, and OnlyRnW indicates that ReadSet and WriteSet are not seperated (that is, ReadSet's content is added to Writeset).
 
@@ -103,9 +103,9 @@ Here, we consider the simplest deterministic reordering algorithm, which maximiz
 
 We experimented with three cases where N=32/64/128:
 
-- N=32：20.54
-- N=64：22.44
-- N=128：23.74
+- N=32：22.27
+- N=64：24.23
+- N=128：25.63
 
 ### Use Bloom Filter to accelerate collision analysis
 
@@ -115,9 +115,9 @@ Because the Bloom Filter has False Positives, the cost of accelerated checking i
 
 We experimented with three cases where N=32/64/128:
 
-- N=32：19.44
-- N=64：21.07
-- N=128：22.16
+- N=32：20.97
+- N=64：22.66
+- N=128：23.83
 
 Compared with the previous results, it can be seen that the loss caused by False Positive is relatively small.
 
@@ -125,11 +125,13 @@ Compared with the previous results, it can be seen that the loss caused by False
 
 We recommend to use the bloomfilter-based scheduler in production, because it is the most efficient. We test the throughput for N=32/64/128:
 
-- N=32：412k/sec
-- N=64：408k/sec
-- N=128：299k/sec
+- N=32：1960k/sec
+- N=64：2068k/sec
+- N=128：2081k/sec
 
-Since 32 and 64 are both within the CPU's general purpose register size (64), they have roughly the same throughput. The case of 128 costs more CPU L1 cache bandwidth, so it's slower.
+The throughput is not sensitive to bit width, because modern CPUs can fetch up to 256 bits from L1 cache with one instruction. As long as the bit width is no larger than the load width, the throughput remains the same.
+
+The larger the bit width is, the less bundles are outputted. After outputting one bundle, we need to clear one the bloom filter. So as the bit width gets wider, the throughput gets a little higher because less clear options are needed for the bloom filters.
 
 ### Aggregates transactions from the same account into a task
 
@@ -147,4 +149,5 @@ In practice, a major obstacle to reordering scheduling algorithms is that severa
 
 ## Conclusion
 
-Strictly speaking, the TLP of Ethereum is exactly 1, which means no concurrency is possible. After we fix the COINBASE problem, TLP can rise to 3.23. If the mainstream DEXs can avoid using WETH (like Uniswap-V4), TLP can rise to 5.80. If we are allowed to reorder the transactions with a deterministic scheduler, TLP can rise to 21. The Bloomfilter-based scheduler is very efficient and can schedule more than 400k tx per second.
+Strictly speaking, the TLP of Ethereum is exactly 1, which means no concurrency is possible. After we fix the COINBASE problem, TLP can rise to 3.29. If the mainstream DEXs can avoid using WETH (like Uniswap-V4), TLP can rise to 6.01. If we are allowed to reorder the transactions with a deterministic scheduler, TLP can rise to 23. The Bloomfilter-based scheduler is very efficient and can schedule more than two millions tx per second.
+

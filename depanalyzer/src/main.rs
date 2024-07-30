@@ -22,7 +22,7 @@ const MAX_TX_IN_TASK: usize = 4;
 const MAX_TX_IN_TASK: usize = 1;
 
 const START_HEIGHT: usize = 20338950;
-const END_HEIGHT: usize = 20343510;
+const END_HEIGHT: usize = 20340960;
 
 pub const WETH_ADDR: &str = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
 
