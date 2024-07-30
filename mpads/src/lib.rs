@@ -98,19 +98,34 @@ impl AdsCore {
         let meta_dir = dir.to_owned() + "/metadb";
         let meta = MetaDB::new_with_dir(&meta_dir);
         let curr_height = meta.get_curr_height();
+        let meta = Arc::new(RwLock::new(meta));
+
+        // recover trees in parallel
+        let mut recover_handles = Vec::with_capacity(SHARD_COUNT);
+        for shard_id in 0..SHARD_COUNT {
+            let meta_clone = meta.clone();
+            let data_dir = data_dir.clone();
+
+            let handle = thread::spawn(move || {
+                // let (tree, oldest_active_twig_id, oldest_active_sn)
+                Self::_recover_tree(
+                    meta_clone,
+                    data_dir,
+                    wrbuf_size,
+                    file_segment_size,
+                    curr_height,
+                    shard_id,
+                )
+            });
+            recover_handles.push(handle);
+        }
 
         let mut entry_files = Vec::with_capacity(SHARD_COUNT);
         let mut shards: Vec<Box<FlusherShard>> = Vec::with_capacity(SHARD_COUNT);
 
         for shard_id in 0..SHARD_COUNT {
-            let (tree, oldest_active_twig_id, oldest_active_sn) = Self::_recover_tree(
-                &meta,
-                data_dir.clone(),
-                wrbuf_size,
-                file_segment_size,
-                curr_height,
-                shard_id,
-            );
+            let handle = recover_handles.remove(0);
+            let (tree, oldest_active_twig_id, oldest_active_sn) = handle.join().unwrap();
 
             Self::index_tree(&tree, oldest_active_twig_id, &indexer);
 
@@ -122,7 +137,6 @@ impl AdsCore {
             )));
         }
 
-        let meta = Arc::new(RwLock::new(meta));
         let max_kept_height = 1000;
         let flusher = Flusher::new(
             shards,
@@ -147,13 +161,14 @@ impl AdsCore {
     }
 
     fn _recover_tree(
-        meta: &MetaDB,
+        meta: Arc<RwLock<MetaDB>>,
         data_dir: String,
         buffer_size: usize,
         file_segment_size: usize,
         curr_height: i64,
         shard_id: usize,
     ) -> (Tree, u64, u64) {
+        let meta = meta.read().unwrap();
         let oldest_active_sn = meta.get_oldest_active_sn(shard_id);
         let oldest_active_twig_id = oldest_active_sn >> TWIG_SHIFT;
         let youngest_twig_id = meta.get_youngest_twig_id(shard_id);
