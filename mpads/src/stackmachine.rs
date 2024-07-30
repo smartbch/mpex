@@ -1,5 +1,5 @@
 use rand_core::le;
-use std::{collections::HashMap, hash::Hash};
+use std::{collections::HashMap, hash::Hash, mem};
 
 use crate::{tree::NodePos, utils::hasher::hash2};
 
@@ -94,10 +94,15 @@ impl StackMachine {
             panic!("stack len < 2");
         }
 
-        let right = self.stack.pop().unwrap();
-        let left = self.stack.pop().unwrap();
-        println!("combine: {:?} + {:?}", left.node_pos, right.node_pos);
-        // println!("combine: {:?} + {:?}", left.old_value, right.old_value);
+        let mut right = self.stack.pop().unwrap();
+        let mut left = self.stack.pop().unwrap();
+        if left.node_pos.nth() & 1 != 0 {
+            (left, right) = (right, left);
+        }
+        println!(
+            "-------------combine: {:?} + {:?}--------------",
+            left.node_pos, right.node_pos
+        );
 
         if get_sibling_pos(&left.node_pos) != right.node_pos {
             panic!("siblings can't combine");
@@ -115,7 +120,10 @@ impl StackMachine {
             new_value: combined_new_value,
             node_pos: parent_pos,
         };
-
+        // println!(
+        //     "combine: {:?} + {:?} = {:?}",
+        //     left.old_value, right.old_value, combined_new_value
+        // );
         self.stack.push(parent);
     }
 
@@ -238,7 +246,7 @@ mod compare_tests {
 
         let mut machine = StackMachine::new(pre_map, post_map, twig_of_left_max_level);
         let root = machine.run();
-        println!("root: {:?}", root);
+        // println!("root: {:?}", root);
     }
 
     #[test]
@@ -259,12 +267,31 @@ mod compare_tests {
             .sync_upper_nodes(n_list, tree.youngest_twig_id);
         check::check_hash_consistency(&tree);
 
-        let mut pre_map = HashMap::<NodePos, [u8; 32]>::new();
-        let max_level = tree.get_proof_map(0, &mut pre_map);
-        // println!("pre_map: {:?}", pre_map.keys());
+        // let mut x = tree.get_proof(2031);
+        // x.check(true).unwrap();
 
-        let mut machine = StackMachine::new(pre_map, HashMap::new(), max_level as u64);
-        let root = machine.run();
-        println!("root: {:?}", root,);
+        {
+            let mut pre_map = HashMap::<NodePos, [u8; 32]>::new();
+            let max_level = tree.get_proof_map(0, &mut pre_map);
+            let mut machine = StackMachine::new(pre_map, HashMap::new(), max_level as u64);
+            let root = machine.run();
+            assert_eq!(root.new_value[0..2], [146, 244]);
+        }
+        {
+            let mut pre_map = HashMap::<NodePos, [u8; 32]>::new();
+            let max_level = tree.get_proof_map(2031, &mut pre_map); // total level is max_level + 1
+            println!("get_proof_map {:?}", pre_map.keys());
+            let mut machine = StackMachine::new(pre_map, HashMap::new(), max_level as u64);
+            let root = machine.run();
+            assert_eq!(root.new_value[0..2], [146, 244]);
+        }
+        {
+            let mut pre_map = HashMap::<NodePos, [u8; 32]>::new();
+            let max_level = tree.get_proof_map(2060, &mut pre_map); // total level is max_level + 1
+            println!("get_proof_map {:?}", pre_map.keys());
+            let mut machine = StackMachine::new(pre_map, HashMap::new(), max_level as u64);
+            let root = machine.run();
+            assert_eq!(root.new_value[0..2], [146, 244]);
+        }
     }
 }
