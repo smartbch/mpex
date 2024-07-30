@@ -103,19 +103,23 @@ impl AdsCore {
         // recover trees in parallel
         let mut recover_handles = Vec::with_capacity(SHARD_COUNT);
         for shard_id in 0..SHARD_COUNT {
-            let meta_clone = meta.clone();
+            let meta = meta.clone();
             let data_dir = data_dir.clone();
+            let indexer = indexer.clone();
 
             let handle = thread::spawn(move || {
-                // let (tree, oldest_active_twig_id, oldest_active_sn)
-                Self::_recover_tree(
-                    meta_clone,
+                let (tree, oldest_active_twig_id, oldest_active_sn) = Self::_recover_tree(
+                    meta,
                     data_dir,
                     wrbuf_size,
                     file_segment_size,
                     curr_height,
                     shard_id,
-                )
+                );
+
+                Self::index_tree(&tree, oldest_active_twig_id, &indexer);
+
+                (tree, oldest_active_sn)
             });
             recover_handles.push(handle);
         }
@@ -125,9 +129,7 @@ impl AdsCore {
 
         for shard_id in 0..SHARD_COUNT {
             let handle = recover_handles.remove(0);
-            let (tree, oldest_active_twig_id, oldest_active_sn) = handle.join().unwrap();
-
-            Self::index_tree(&tree, oldest_active_twig_id, &indexer);
+            let (tree, oldest_active_sn) = handle.join().unwrap();
 
             entry_files.push(tree.entry_file_wr.entry_file.clone());
             shards.push(Box::new(FlusherShard::new(
