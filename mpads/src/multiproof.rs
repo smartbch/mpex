@@ -83,18 +83,20 @@ pub fn _get_witness(
     nth: u64,
 ) {
     let (l, mut n) = (level - 1, nth * 2);
-    //the left child
-    if included_nodes.contains(&(l, n)) {
+    let has_left = included_nodes.contains(&(l, n));
+    let has_right = included_nodes.contains(&(l, n + 1));
+    if has_left {
         _get_witness(included_nodes, witness, l, n);
     }
-    n += 1;
-    //the right child
-    if included_nodes.contains(&(l, n)) {
-        _get_witness(included_nodes, witness, l, n);
+    if has_right {
+        _get_witness(included_nodes, witness, l, n + 1);
+    } else {
+        panic!("only left child");
     }
-    //the parent itself
-    witness.push(IncludedNode::new(level, nth));
-    return;
+    if !has_left {
+        // add the leaf
+        witness.push(IncludedNode::new(level, nth));
+    }
 }
 
 // For each leaf, where to find its own witness and its activebit's witness?
