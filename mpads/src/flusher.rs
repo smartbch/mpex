@@ -1,4 +1,4 @@
-use crate::def::{LEAF_COUNT_IN_TWIG, PRUNE_EVERY_NBLOCKS};
+use crate::def::{LEAF_COUNT_IN_TWIG, PRUNE_EVERY_NBLOCKS, MIN_PRUNE_COUNT, TWIG_SHIFT};
 use crate::entrybuffer::EntryBufferReader;
 use crate::entryfile::{EntryFile, EntryFileWriter};
 use crate::metadb::MetaDB;
@@ -199,7 +199,7 @@ impl FlusherShard {
         let mut end_twig_id: u64 = 0;
         if prune_to_height > 0 && prune_to_height % PRUNE_EVERY_NBLOCKS == 0 {
             let meta = meta.read().unwrap();
-            start_twig_id = meta.get_last_pruned_twig(self.shard_id) + 1;
+            start_twig_id = meta.get_last_pruned_twig(self.shard_id);
             end_twig_id = meta.get_first_twig_at_height(self.shard_id, prune_to_height);
             if end_twig_id == u64::MAX {
                 panic!("FirstTwigAtHeight Not Found");
@@ -208,26 +208,36 @@ impl FlusherShard {
             if end_twig_id > last_evicted_twig_id {
                 end_twig_id = last_evicted_twig_id;
             }
-            self.tree.prune_twigs(start_twig_id, end_twig_id);
+            if start_twig_id <= end_twig_id && end_twig_id < start_twig_id + MIN_PRUNE_COUNT {
+                end_twig_id = start_twig_id;
+            } else {
+                self.tree.prune_twigs(start_twig_id, end_twig_id);
+            }
         }
         let del_start = self.last_compact_done_sn / (LEAF_COUNT_IN_TWIG as u64);
         let del_end = compact_done_sn / (LEAF_COUNT_IN_TWIG as u64);
         let tmp_list = self.tree.flush_files(del_start, del_end);
         let (entry_file_size, twig_file_size) = self.tree.get_file_sizes();
+        let last_compact_done_sn = self.last_compact_done_sn;
         self.last_compact_done_sn = compact_done_sn;
         bar_set.flush_bar.wait();
 
         let youngest_twig_id = self.tree.youngest_twig_id;
-        let last_compact_done_sn = self.last_compact_done_sn;
         let shard_id = self.shard_id;
         let mut upper_tree = UpperTree::empty();
         mem::swap(&mut self.tree.upper_tree, &mut upper_tree);
         let upper_tree_sender = self.upper_tree_sender.clone();
         thread::spawn(move || {
-            let n_list = upper_tree.evict_twigs(tmp_list, last_compact_done_sn, compact_done_sn);
+            let n_list = upper_tree.evict_twigs(
+                tmp_list,
+                last_compact_done_sn >> TWIG_SHIFT,
+                compact_done_sn >> TWIG_SHIFT,
+            );
             let (_new_n_list, root_hash) = upper_tree.sync_upper_nodes(n_list, youngest_twig_id);
             let mut edge_nodes_bytes = Vec::<u8>::with_capacity(0);
-            if prune_to_height > 0 && prune_to_height % PRUNE_EVERY_NBLOCKS == 0 {
+            if prune_to_height > 0 &&
+                prune_to_height % PRUNE_EVERY_NBLOCKS == 0 &&
+                start_twig_id < end_twig_id {
                 edge_nodes_bytes =
                     upper_tree.prune_nodes(start_twig_id, end_twig_id, youngest_twig_id);
             }

@@ -85,6 +85,7 @@ pub struct EdgeNode {
 
 #[derive(Clone)]
 pub struct UpperTree {
+    pub my_shard_id: usize,
     // the nodes in high level tree (higher than twigs)
     // this variable can be recovered from saved edge nodes and activeTwigs
     pub nodes: Vec<Vec<HashMap<NodePos, [u8; 32]>>>, //MaxUpperLevel*NodeShardCount maps
@@ -95,17 +96,19 @@ pub struct UpperTree {
 impl UpperTree {
     pub fn empty() -> Self {
         Self {
+            my_shard_id: 0,
             nodes: Vec::with_capacity(0),
             active_twig_shards: Vec::with_capacity(0),
         }
     }
 
-    pub fn new() -> Self {
+    pub fn new(my_shard_id: usize) -> Self {
         let node_shards = vec![HashMap::<NodePos, [u8; 32]>::new(); NODE_SHARD_COUNT];
         let nodes = vec![node_shards; MAX_TREE_LEVEL];
         let active_twig_shards = vec![HashMap::<u64, twig::Twig>::new(); TWIG_SHARD_COUNT];
 
         Self {
+            my_shard_id,
             nodes,
             active_twig_shards,
         }
@@ -200,7 +203,7 @@ impl UpperTree {
             if let Some(v) = self.get_node(pos) {
                 new_edge_nodes.push(EdgeNode { pos, value: *v });
             } else {
-                panic!("What? can not find {}-{}", level, end);
+                panic!("What? can not find shard_id={} max_level={} level={} end={} cur_end={}", self.my_shard_id, max_level, level, end, cur_end);
             }
             cur_end >>= 1;
         }
@@ -468,7 +471,7 @@ impl Tree {
 
         Self {
             my_shard_id: shard_id,
-            upper_tree: UpperTree::new(),
+            upper_tree: UpperTree::new(shard_id),
             new_twig_map: HashMap::new(),
             entry_file_wr: EntryFileWriter::new(ef_arc, buffer_size),
             twig_file_wr: TwigFileWriter::new(twig_arc, buffer_size),
