@@ -19,6 +19,12 @@ impl IncludedNode {
             nth,
         }
     }
+    pub fn is_leaf(&self) -> bool {
+        if self.level == 8 && self.nth % 16 >= 8 {
+            return true;
+        }
+        self.level == 0 && self.nth % 4096 < 2048
+    }
 }
 
 fn sn_to_leaf(sn: u64) -> u64 {
@@ -146,6 +152,9 @@ pub fn verify_witness(
         } else {
             let e = &witness[idx];
             idx += 1;
+            if !e.is_leaf() && e.old_value != e.new_value {
+                return false;
+            }
             stack.push(e.clone());
         }
     }
