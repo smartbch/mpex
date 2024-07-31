@@ -37,7 +37,7 @@ use crate::compactor::{CompactJob, Compactor};
 use crate::def::{
     CODE_PATH, COMPACT_RING_SIZE, COMPACT_THRES, DEFAULT_ENTRY_SIZE, IN_BLOCK_IDX_BITS,
     PREFETCHER_THREAD_COUNT, SENTRY_COUNT, SHARD_COUNT, TASK_CHAN_SIZE, TWIG_SHIFT,
-    UTILIZATION_DIV, UTILIZATION_RATIO,
+    UTILIZATION_DIV, UTILIZATION_RATIO, COMPACT_TRIGGER,
 };
 use crate::entry::{sentry_entry, EntryBz};
 use crate::entrycache::EntryCache;
@@ -139,7 +139,7 @@ impl AdsCore {
             )));
         }
 
-        let max_kept_height = 1000;
+        let max_kept_height = 10; //1000;
         let flusher = Flusher::new(
             shards,
             code_shard,
@@ -372,10 +372,9 @@ impl AdsCore {
                 prefetcher.run_task(task_id);
             });
             let (cmpt_producer, cmpt_consumer) = ringchannel::new(COMPACT_RING_SIZE, &job);
-            let compact_trigger = COMPACT_THRES * UTILIZATION_RATIO / UTILIZATION_DIV / 2;
             let mut compactor = Compactor::new(
                 shard_id,
-                compact_trigger as usize,
+                COMPACT_TRIGGER,
                 entry_file.clone(),
                 self.indexer.clone(),
                 cmpt_producer,

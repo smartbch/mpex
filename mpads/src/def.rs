@@ -9,7 +9,7 @@ pub const DEFAULT_ENTRY_SIZE: usize = 300;
 
 pub const SENTRY_COUNT: usize = (1 << 16) / SHARD_COUNT; // 4096
 
-pub const PRUNE_EVERY_NBLOCKS: i64 = 1024;
+pub const PRUNE_EVERY_NBLOCKS: i64 = 32;
 
 pub const PRE_READ_BUF_SIZE: usize = 256 * 1024;
 
@@ -37,7 +37,8 @@ pub const TWIG_SHIFT: u32 = 11; // a twig has 2**11 leaves
 pub const LEAF_COUNT_IN_TWIG: u32 = 1 << TWIG_SHIFT; // 2**11==2048
 pub const TWIG_MASK: u32 = LEAF_COUNT_IN_TWIG - 1;
 
-pub const COMPACT_THRES: i64 = 20000;
+pub const COMPACT_THRES: i64 = 200000;
+pub const COMPACT_TRIGGER: usize = COMPACT_THRES as usize / 10;
 pub const UTILIZATION_RATIO: i64 = 128;
 pub const UTILIZATION_DIV: i64 = 256;
 
