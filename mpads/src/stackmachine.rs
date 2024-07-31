@@ -29,14 +29,7 @@ fn get_parent_pos(pos: &NodePos) -> NodePos {
 fn get_sibling_pos(pos: &NodePos) -> NodePos {
     let level = pos.level();
     let mut nth: u64 = pos.nth();
-    let sibling_nth = {
-        if nth % 2 == 0 {
-            nth += 1
-        } else {
-            nth -= 1
-        }
-        nth
-    };
+    let sibling_nth = nth ^ 1;
     NodePos::pos(level, sibling_nth)
 }
 
@@ -203,6 +196,9 @@ impl StackMachine {
             .min()
             .unwrap();
         let _ = self.make_stack_or_execute(&NodePos::pos(0, min_left_node_nth_at_level0));
+        if self.pre_map.len() != 0 {
+            panic!("pre_map not empty");
+        }
         self.stack.pop().unwrap()
     }
 }

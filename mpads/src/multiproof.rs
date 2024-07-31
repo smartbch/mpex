@@ -1,6 +1,6 @@
-use crate::utils::hasher;
 use crate::entry::EntryBz;
-use std::collections::{HashSet, HashMap};
+use crate::utils::hasher;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone)]
 struct IncludedNode {
@@ -123,7 +123,7 @@ pub fn get_witness_offsets(witness: &Vec<IncludedNode>, leaves: &Vec<u64>) -> Ve
 
 // ====== Consume the witness data =========
 
-// check the integrity and correctness of witness 
+// check the integrity and correctness of witness
 pub fn verify_witness(
     witness: &Vec<IncludedNode>,
     old_root: &[u8; 32],
@@ -186,7 +186,7 @@ pub fn verify_entries(
         if w.level != 0 || w.nth != leaf {
             return false; // NodePos of witness is wrong
         }
-        let v = if for_old {&w.old_value} else {&w.new_value};
+        let v = if for_old { &w.old_value } else { &w.new_value };
         if *v != entry.hash() {
             return false; // hash mismatch
         }
@@ -200,8 +200,8 @@ pub fn verify_entries(
             return false; // NodePos of witness is wrong
         }
         let n = (leaf % 256) as usize;
-        let v = if for_old {&w.old_value} else {&w.new_value};
-        if ((v[n/8] >> (n%8)) & 1) == 0 {
+        let v = if for_old { &w.old_value } else { &w.new_value };
+        if ((v[n / 8] >> (n % 8)) & 1) == 0 {
             return false; // activebit is not set
         }
     }
@@ -215,3 +215,56 @@ pub fn get_changed_sn(witness: &Vec<IncludedNode>) -> (Vec<u64>, Vec<u64>) {
     (actived_sn_vec, deactived_sn_vec)
 }
 
+#[cfg(test)]
+mod tests {
+    use crate::multiproof::{
+        get_changed_sn, get_included_nodes, get_witness, get_witness_offsets, verify_entries,
+        verify_witness,
+    };
+
+    #[test]
+    fn test_get_included_nodes() {
+        let leaves = vec![0];
+        let included_nodes = get_included_nodes(9, &leaves);
+        println!("{:?}", included_nodes);
+    }
+
+    #[test]
+    fn test_get_witness() {
+        let leaves = vec![0];
+        let included_nodes = get_included_nodes(15, &leaves);
+        println!("{:?}", included_nodes);
+
+        let witness = get_witness(&included_nodes, 15);
+        println!("{:?}", included_nodes);
+    }
+
+    #[test]
+    fn test_verify_witness() {
+        let leaves = vec![0];
+        let included_nodes = get_included_nodes(15, &leaves);
+        println!("{:?}", included_nodes);
+
+        let witness = get_witness(&included_nodes, 15);
+        println!("{:?}", included_nodes);
+        verify_witness(&witness, &[0; 32], &[0; 32]);
+    }
+
+    #[test]
+    fn test() {
+        let leaves = vec![0];
+        let included_nodes = get_included_nodes(15, &leaves);
+        println!("{:?}", included_nodes);
+
+        let witness = get_witness(&included_nodes, 15);
+        println!("{:?}", included_nodes);
+        verify_witness(&witness, &[0; 32], &[0; 32]);
+
+        let entries = vec![];
+        let witness_offsets = get_witness_offsets(&witness, &leaves);
+        verify_entries(true, &entries, &witness_offsets, &witness);
+
+        let changed_sn = get_changed_sn(&witness);
+        println!("{:?}", changed_sn);
+    }
+}
