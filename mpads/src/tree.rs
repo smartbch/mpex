@@ -891,10 +891,10 @@ impl Tree {
         let twig = self.upper_tree.active_twig_shards[s]
             .get(&k)
             .unwrap_or(&twig::NULL_TWIG);
-        println!(
-            "twig_{} left_root: {:?} twig_root: {:?}",
-            twig_id, twig.left_root, twig.twig_root
-        );
+        // println!(
+        //     "twig_{} left_root: {:?} twig_root: {:?}",
+        //     twig_id, twig.left_root, twig.twig_root
+        // );
         let peer = (self_id >> 1) ^ 1;
         let hash = twig.active_bits_mtl1[peer as usize];
         proof_map.insert(
