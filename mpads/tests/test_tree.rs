@@ -490,7 +490,7 @@ mod tests {
         let _tmp_dir = TempDir::new(&dir_name);
 
         let deact_sn_list = vec![101, 999, 1002];
-        let (mut tree, pos_list, max_serial_num) =
+        let (mut tree, pos_list, max_serial_num, _) =
             test_helper::build_test_tree(dir_name, &deact_sn_list, TWIG_MASK as i32, 6);
 
         let n_list = tree.flush_files(0, 0);

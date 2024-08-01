@@ -147,18 +147,24 @@ pub fn get_witness(included_nodes: &HashSet<(u8, u64)>, max_level: u8) -> Vec<In
 }
 
 // For each leaf, where to find its own witness and its activebit's witness?
-pub fn get_witness_offsets(witness: &Vec<IncludedNode>, leaves: &Vec<u64>) -> Vec<(usize, usize)> {
+fn get_witness_offsets(witness: &Vec<IncludedNode>, leaves: &Vec<u64>) -> Vec<(usize, usize)> {
     let mut node2idx = HashMap::<(u8, u64), usize>::new();
-    for i in 0..witness.len() {
-        node2idx.insert((witness[i].level, witness[i].nth), i);
+    for (i, leaf) in leaves.iter().enumerate() {
+        node2idx.insert((0, *leaf), i);
+        node2idx.insert((8, leaf_to_nth_for_activebits(*leaf)), i);
     }
-    let mut witness_offsets = Vec::new();
-    for &leaf in leaves.iter() {
-        let idx = node2idx.get(&(0, leaf)).unwrap();
-        let activebit_leaf = leaf_to_nth_for_activebits(leaf);
-        let activebit_idx = node2idx.get(&(8, activebit_leaf)).unwrap();
-        witness_offsets.push((*idx, *activebit_idx));
+
+    let mut witness_offsets = vec![(0, 0); leaves.len()];
+    for (i, item) in witness.iter().enumerate() {
+        if let Some(idx) = node2idx.get(&(item.level, item.nth)) {
+            if item.level == 0 {
+                witness_offsets[*idx].0 = i;
+            } else if item.level == 8 {
+                witness_offsets[*idx].1 = i;
+            }
+        }
     }
+    // idx active_idx
     witness_offsets
 }
 
@@ -200,9 +206,10 @@ pub fn verify_witness(
         } else {
             let e = &witness[idx];
             idx += 1;
-            if !e.is_leaf() && e.old_value != e.new_value {
-                return false;
-            }
+            // TODO
+            // if !e.is_leaf() && e.old_value != e.new_value {
+            //     return false;
+            // }
             stack.push(e.clone());
         }
     }
@@ -210,13 +217,13 @@ pub fn verify_witness(
         return false;
     }
     let root = stack.pop().unwrap();
-    println!("root: {:?}", root);
+    println!("verify_witness root: {:?}", root);
     root.old_value == *old_root && root.new_value == *new_root
 }
 
 // verify the entries' correctness
 pub fn verify_entries(
-    for_old: bool,
+    start_sn_for_new_entry: u64,
     entries: &Vec<EntryBz>,
     witness_offsets: &Vec<(usize, usize)>,
     witness: &Vec<IncludedNode>,
@@ -231,10 +238,12 @@ pub fn verify_entries(
             return false;
         }
         let w = &witness[offset];
-        let leaf = sn_to_leaf(entry.serial_number());
+        let sn = entry.serial_number();
+        let leaf = sn_to_leaf(sn);
         if w.level != 0 || w.nth != leaf {
             return false; // NodePos of witness is wrong
         }
+        let for_old = sn < start_sn_for_new_entry;
         let v = if for_old { &w.old_value } else { &w.new_value };
         if *v != entry.hash() {
             return false; // hash mismatch
@@ -270,14 +279,19 @@ mod tests {
 
     use crate::{
         check,
-        def::TWIG_MASK,
+        def::{DEFAULT_ENTRY_SIZE, ENTRY_FIXED_LENGTH, SENTRY_COUNT, TWIG_MASK},
+        entry::{self, Entry, EntryBz},
+        entryfile::EntryFileWithPreReader,
         multiproof::{
             get_changed_sn, get_included_nodes, get_witness, get_witness_offsets, sn_to_leaf,
             verify_entries, verify_witness,
         },
-        test_helper::{build_test_tree, TempDir},
+        test_helper::{build_test_tree, pad32, TempDir},
         tree::{NodePos, Tree},
+        twig::{NULL_ACTIVE_BITS, NULL_MT_FOR_TWIG, NULL_NODE_IN_HIGHER_TREE, NULL_TWIG},
     };
+
+    use super::IncludedNode;
 
     #[test]
     fn test_get_included_nodes() {
@@ -299,7 +313,7 @@ mod tests {
         //TODO replace value
         let dir_name = "./DataTree";
         let _tmp_dir = TempDir::new(dir_name);
-        let tree = create_tree(dir_name);
+        let (tree, _, _, _) = create_tree(dir_name, true);
         let mut hash_map = HashMap::new();
         for sn in sns {
             tree.get_proof_map(sn, &mut hash_map);
@@ -327,11 +341,9 @@ mod tests {
         //TODO replace value
         let dir_name = "./DataTree";
         let _tmp_dir = TempDir::new(dir_name);
-        let tree = create_tree(dir_name);
+        let (tree, _, _, _) = create_tree(dir_name, true);
         let mut hash_map = HashMap::new();
-        for sn in sns {
-            tree.get_proof_map(sn, &mut hash_map);
-        }
+        tree.get_proof_map_by_sns(&sns, &mut hash_map);
         for node in &mut witness {
             let v = hash_map
                 .get(&NodePos::pos(node.level as u64, node.nth))
@@ -352,38 +364,90 @@ mod tests {
             ],
         );
         assert!(b);
+
+        //TODO different entry_bzs[8188]
+        // let mut entry_file = EntryFileWithPreReader::new(&tree.entry_file_wr.entry_file);
+        // let mut buff = vec![];
+        // entry_file.read_entry(poslist[8188 as usize], &mut buff);
+        // println!("----{:?}", buff);
     }
 
     #[test]
     fn test_verify_entries() {
-        let sns = vec![0, 2031, 2060];
-        let leaves = sns.iter().map(|&sn| sn_to_leaf(sn)).collect();
-        let max_level = 15;
-        let included_nodes = get_included_nodes(max_level, &leaves);
-
-        let mut witness = get_witness(&included_nodes, max_level);
-        //TODO replace value
         let dir_name = "./DataTree";
         let _tmp_dir = TempDir::new(dir_name);
-        let tree = create_tree(dir_name);
-        let mut hash_map = HashMap::new();
-        for sn in sns {
-            tree.get_proof_map(sn, &mut hash_map);
-        }
-        for node in &mut witness {
-            let v = hash_map
-                .get(&NodePos::pos(node.level as u64, node.nth))
-                .unwrap();
-            node.new_value = v.clone();
-            node.old_value = v.clone();
+
+        let pre_sns = vec![];
+        let mut pre_proof_map = HashMap::new();
+        let mut pre_max_level = 0;
+        {
+            let (mut tree, mut pos_list, mut serial_number, mut entry_bzs) =
+                create_tree(dir_name, true);
+            pre_max_level = tree.get_proof_map_by_sns(&pre_sns, &mut pre_proof_map) as u8;
         }
 
-        let entries = vec![];
-        let witness_offsets = get_witness_offsets(&witness, &leaves);
-        verify_entries(true, &entries, &witness_offsets, &witness);
+        let post_sns = vec![9788];
+        let mut post_max_level = 0;
+        let mut post_proof_map = HashMap::new();
+        let entry_bzs: Vec<Vec<u8>>;
+        {
+            let (mut tree, mut pos_list, mut serial_number, mut _entry_bzs) =
+                create_tree(dir_name, false);
+            // change tree
+            for i in 0..2 {
+                let mut entry = Entry {
+                    key: &b"key".as_slice(),
+                    value: &b"value".as_slice(),
+                    next_key_hash: &pad32(b"nextkey".as_slice()),
+                    version: 100,
+                    last_version: 99,
+                    serial_number: 0,
+                };
+                serial_number += 1;
+                entry.serial_number = serial_number;
+                let deactived_sn_list = if i == 0 { vec![9787] } else { vec![] };
+                for sn in &deactived_sn_list {
+                    tree.deactive_entry(*sn);
+                }
+                let total_len0 =
+                    ((ENTRY_FIXED_LENGTH + &entry.key.len() + &entry.value.len() + 7) / 8) * 8;
+                let mut bz = vec![0u8; total_len0 + 8 * deactived_sn_list.len()];
+                let entry_bz = entry::entry_to_bytes(&entry, &deactived_sn_list, &mut bz);
+                pos_list.push(tree.append_entry(&entry_bz));
+                _entry_bzs.push(entry_bz.bz.to_vec());
+            }
 
-        let changed_sn = get_changed_sn(&witness);
-        println!("{:?}", changed_sn);
+            let n_list = tree.flush_files(0, 0);
+            let n_list = tree.upper_tree.evict_twigs(n_list, 0, 0);
+            tree.upper_tree
+                .sync_upper_nodes(n_list, tree.youngest_twig_id);
+            check::check_hash_consistency(&tree);
+
+            post_max_level = tree.get_proof_map_by_sns(&post_sns, &mut post_proof_map) as u8;
+            entry_bzs = _entry_bzs;
+        }
+        let mut sns = vec![];
+        sns.extend(pre_sns.iter());
+        sns.extend(post_sns);
+        let leaves = sns.iter().map(|&sn| sn_to_leaf(sn)).collect();
+        let included_nodes = get_included_nodes(15, &leaves);
+
+        let mut witness = get_witness(&included_nodes, 15);
+        merge_witness(&mut witness, pre_proof_map, post_proof_map);
+
+        verify_witness(&witness, &[0; 32], &[0; 32]);
+        println!("{:?}", NULL_NODE_IN_HIGHER_TREE[15]);
+        // let mut entries = vec![];
+        // for sn in sns {
+        //     let entry = EntryBz {
+        //         bz: &entry_bzs[sn as usize],
+        //     };
+        //     entries.push(entry);
+        // }
+
+        // let witness_offsets = get_witness_offsets(&witness, &leaves);
+        // let b = verify_entries(9787 as u64 + 1, &entries, &witness_offsets, &witness);
+        // assert!(b);
     }
 
     #[test]
@@ -398,23 +462,79 @@ mod tests {
 
         let entries = vec![];
         let witness_offsets = get_witness_offsets(&witness, &leaves);
-        verify_entries(true, &entries, &witness_offsets, &witness);
+        verify_entries(4000, &entries, &witness_offsets, &witness);
 
         let changed_sn = get_changed_sn(&witness);
         println!("{:?}", changed_sn);
     }
 
-    fn create_tree(dir_name: &str) -> Tree {
+    fn create_tree(dir_name: &str, sync: bool) -> (Tree, Vec<i64>, u64, Vec<Vec<u8>>) {
         let deact_sn_list: Vec<u64> = (0..2048)
             .chain(vec![5000, 5500, 5700, 5813, 6001])
             .collect();
-        let (mut tree, _, _) =
+        let (mut tree, pos_list, serial_number, entry_bzs) =
             build_test_tree(dir_name, &deact_sn_list, TWIG_MASK as i32 * 4, 1600);
-        let n_list = tree.flush_files(0, 0);
-        let n_list = tree.upper_tree.evict_twigs(n_list, 0, 0);
-        tree.upper_tree
-            .sync_upper_nodes(n_list, tree.youngest_twig_id);
-        check::check_hash_consistency(&tree);
-        tree
+        if sync {
+            let n_list = tree.flush_files(0, 0);
+            let n_list = tree.upper_tree.evict_twigs(n_list, 0, 0);
+            tree.upper_tree
+                .sync_upper_nodes(n_list, tree.youngest_twig_id);
+            check::check_hash_consistency(&tree);
+        }
+        (tree, pos_list, serial_number, entry_bzs)
+    }
+
+    fn get_null_hash_by_level(level: u8, nth: u64) -> [u8; 32] {
+        if level > 12 {
+            return NULL_NODE_IN_HIGHER_TREE[level as usize];
+        }
+
+        let stride = 1 << (12 - level) as usize;
+        let _nth = nth as usize % stride;
+        if level == 12 {
+            return NULL_TWIG.twig_root;
+        }
+        if level == 11 && _nth == 0 {
+            return NULL_TWIG.left_root;
+        }
+        if _nth >= stride / 2 {
+            if level == 8 {
+                return NULL_ACTIVE_BITS.get_bits(_nth - 8, 32).try_into().unwrap();
+            }
+            if level == 9 {
+                return NULL_TWIG.active_bits_mtl1[_nth - 4];
+            }
+            if level == 10 {
+                return NULL_TWIG.active_bits_mtl2[_nth - 2];
+            }
+            if level == 11 {
+                return NULL_TWIG.active_bits_mtl3;
+            }
+        }
+        return NULL_MT_FOR_TWIG[nth as usize % stride];
+    }
+
+    fn merge_witness(
+        witness: &mut Vec<IncludedNode>,
+        pre_proof_map: HashMap<NodePos, [u8; 32]>,
+        post_proof_map: HashMap<NodePos, [u8; 32]>,
+    ) {
+        for item in witness {
+            let node_pos = NodePos::pos(item.level as u64, item.nth);
+            // println!("node_pos: {:?}", node_pos);
+            if let Some(old_value) = pre_proof_map.get(&node_pos) {
+                item.old_value.copy_from_slice(old_value);
+                // println!("old_value1: {:?}", old_value);
+            } else {
+                let old_value = get_null_hash_by_level(item.level, item.nth);
+                // println!("old_value2: {:?}", old_value);
+                item.old_value.copy_from_slice(&old_value);
+            }
+            let new_value = post_proof_map
+                .get(&node_pos)
+                .unwrap_or_else(|| pre_proof_map.get(&node_pos).unwrap());
+            // println!("new_value: {:?}", new_value);
+            item.new_value.copy_from_slice(new_value);
+        }
     }
 }

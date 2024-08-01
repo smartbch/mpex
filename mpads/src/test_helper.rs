@@ -1,7 +1,7 @@
 use crate::bptaskhub::Task;
 use crate::changeset::ChangeSet;
 use crate::def::{DEFAULT_FILE_SIZE, ENTRY_FIXED_LENGTH, LEAF_COUNT_IN_TWIG, SMALL_BUFFER_SIZE};
-use crate::entry::{self, Entry};
+use crate::entry::{self, Entry, EntryBz};
 use crate::tree::Tree;
 use std::fs::{create_dir, metadata, read_dir, remove_dir_all, File};
 use std::path::Path;
@@ -82,7 +82,8 @@ pub fn build_test_tree(
     deact_sn_list: &Vec<u64>,
     count_before: i32,
     count_after: i32,
-) -> (Tree, Vec<i64>, u64) {
+) -> (Tree, Vec<i64>, u64, Vec<Vec<u8>>) {
+    let mut entry_bzs = Vec::new();
     let mut tree = Tree::new(
         0,
         SMALL_BUFFER_SIZE as usize,
@@ -105,11 +106,13 @@ pub fn build_test_tree(
 
     let mut pos_list = Vec::with_capacity((LEAF_COUNT_IN_TWIG + 10) as usize);
     pos_list.push(tree.append_entry(&entry_bz));
+    entry_bzs.push(entry_bz.bz.to_vec());
 
     for i in 1..count_before {
         entry.serial_number = i as u64;
         let entry_bz = entry::entry_to_bytes(&entry, &[], &mut bz);
         pos_list.push(tree.append_entry(&entry_bz));
+        entry_bzs.push(entry_bz.bz.to_vec());
     }
     for sn in deact_sn_list {
         tree.deactive_entry(*sn);
@@ -120,14 +123,16 @@ pub fn build_test_tree(
     entry.serial_number = count_before as u64;
     let entry_bz = entry::entry_to_bytes(&entry, deact_sn_list.as_slice(), &mut bz1);
     pos_list.push(tree.append_entry(&entry_bz));
+    entry_bzs.push(entry_bz.bz.to_vec());
 
     for _ in 0..count_after - 1 {
         entry.serial_number += 1;
         let entry_bz = entry::entry_to_bytes(&entry, &[], &mut bz);
         pos_list.push(tree.append_entry(&entry_bz));
+        entry_bzs.push(entry_bz.bz.to_vec());
     }
 
-    (tree, pos_list, entry.serial_number)
+    (tree, pos_list, entry.serial_number, entry_bzs)
 }
 
 pub struct EntryBuilder {

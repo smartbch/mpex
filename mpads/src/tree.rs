@@ -828,6 +828,21 @@ impl Tree {
         path
     }
 
+    pub fn get_proof_map_by_sns(
+        &self,
+        sns: &[u64],
+        proof_map: &mut HashMap<NodePos, [u8; 32]>,
+    ) -> i64 {
+        let mut max_level = 0;
+        for sn in sns {
+            let level = self.get_proof_map(*sn, proof_map);
+            if level > max_level {
+                max_level = level;
+            }
+        }
+        max_level
+    }
+
     pub fn get_proof_map(&self, sn: u64, proof_map: &mut HashMap<NodePos, [u8; 32]>) -> i64 {
         let twig_id = sn >> TWIG_SHIFT;
         let max_level_of_left_of_twig = 12;
@@ -843,7 +858,7 @@ impl Tree {
             let nth = (nth_at_level0 >> level) as usize;
             let peer_nth = nth ^ 1;
             let stride = 2048 >> level;
-            // let node_pos = NodePos::pos(level, peer_nth as u64);
+            let node_pos = NodePos::pos(level, peer_nth as u64);
             // if proof_map.contains_key(&node_pos) {
             //     continue;
             // }

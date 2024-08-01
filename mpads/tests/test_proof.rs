@@ -60,7 +60,7 @@ mod tests {
             .chain(vec![5000, 5500, 5700, 5813, 6001])
             .collect();
 
-        let (mut tree, _, _) =
+        let (mut tree, _, _, _) =
             build_test_tree(dir_name, &deact_sn_list, TWIG_MASK as i32 * 4, 1600);
         let n_list = tree.flush_files(0, 0);
         let n_list = tree.upper_tree.evict_twigs(n_list, 0, 0);

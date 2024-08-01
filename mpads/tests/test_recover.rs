@@ -54,7 +54,7 @@ mod tests {
         let _tmp_dir = TempDir::new(dir_name);
 
         let deact_sn_list = vec![101, 999, 1002];
-        let (mut tree0, _, _) =
+        let (mut tree0, _, _, _) =
             test_helper::build_test_tree(dir_name, &deact_sn_list, TWIG_MASK as i32 * 4, 1600);
 
         let mut n_list = tree0.flush_files(0, 0);
