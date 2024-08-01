@@ -148,19 +148,31 @@ pub fn get_witness(included_nodes: &HashSet<(u8, u64)>, max_level: u8) -> Vec<In
 
 // For each leaf, where to find its own witness and its activebit's witness?
 fn get_witness_offsets(witness: &Vec<IncludedNode>, leaves: &Vec<u64>) -> Vec<(usize, usize)> {
-    let mut node2idx = HashMap::<(u8, u64), usize>::new();
+    let mut node2idx = HashMap::<(u8, u64), Vec<usize>>::new();
     for (i, leaf) in leaves.iter().enumerate() {
-        node2idx.insert((0, *leaf), i);
-        node2idx.insert((8, leaf_to_nth_for_activebits(*leaf)), i);
+        let entry_key = (0, *leaf);
+        if let Some(v) = node2idx.get_mut(&entry_key) {
+            v.push(i);
+        } else {
+            node2idx.insert(entry_key, vec![i]);
+        }
+        let activebits_key = (8, leaf_to_nth_for_activebits(*leaf));
+        if let Some(v) = node2idx.get_mut(&activebits_key) {
+            v.push(i);
+        } else {
+            node2idx.insert(activebits_key, vec![i]);
+        }
     }
 
     let mut witness_offsets = vec![(0, 0); leaves.len()];
     for (i, item) in witness.iter().enumerate() {
         if let Some(idx) = node2idx.get(&(item.level, item.nth)) {
-            if item.level == 0 {
-                witness_offsets[*idx].0 = i;
-            } else if item.level == 8 {
-                witness_offsets[*idx].1 = i;
+            for idx in idx {
+                if item.level == 0 {
+                    witness_offsets[*idx].0 = i;
+                } else if item.level == 8 {
+                    witness_offsets[*idx].1 = i;
+                }
             }
         }
     }
@@ -377,7 +389,7 @@ mod tests {
         let dir_name = "./DataTree";
         let _tmp_dir = TempDir::new(dir_name);
 
-        let pre_sns = vec![];
+        let pre_sns = vec![8188, 9787, 9788, 9789]; // include post_sns
         let mut pre_proof_map = HashMap::new();
         let mut pre_max_level = 0;
         {
@@ -386,7 +398,7 @@ mod tests {
             pre_max_level = tree.get_proof_map_by_sns(&pre_sns, &mut pre_proof_map) as u8;
         }
 
-        let post_sns = vec![9788];
+        let post_sns = vec![9788, 9789];
         let mut post_max_level = 0;
         let mut post_proof_map = HashMap::new();
         let entry_bzs: Vec<Vec<u8>>;
@@ -426,28 +438,28 @@ mod tests {
             post_max_level = tree.get_proof_map_by_sns(&post_sns, &mut post_proof_map) as u8;
             entry_bzs = _entry_bzs;
         }
+
         let mut sns = vec![];
         sns.extend(pre_sns.iter());
-        sns.extend(post_sns);
+        // sns.extend(post_sns);
         let leaves = sns.iter().map(|&sn| sn_to_leaf(sn)).collect();
         let included_nodes = get_included_nodes(15, &leaves);
-
+        // TODO level 不一样
         let mut witness = get_witness(&included_nodes, 15);
         merge_witness(&mut witness, pre_proof_map, post_proof_map);
 
         verify_witness(&witness, &[0; 32], &[0; 32]);
-        println!("{:?}", NULL_NODE_IN_HIGHER_TREE[15]);
-        // let mut entries = vec![];
-        // for sn in sns {
-        //     let entry = EntryBz {
-        //         bz: &entry_bzs[sn as usize],
-        //     };
-        //     entries.push(entry);
-        // }
+        let mut entries = vec![];
+        for sn in sns {
+            let entry = EntryBz {
+                bz: &entry_bzs[sn as usize],
+            };
+            entries.push(entry);
+        }
 
-        // let witness_offsets = get_witness_offsets(&witness, &leaves);
-        // let b = verify_entries(9787 as u64 + 1, &entries, &witness_offsets, &witness);
-        // assert!(b);
+        let witness_offsets = get_witness_offsets(&witness, &leaves);
+        let b = verify_entries(9787 as u64 + 1, &entries, &witness_offsets, &witness);
+        assert!(b);
     }
 
     #[test]
@@ -511,7 +523,7 @@ mod tests {
                 return NULL_TWIG.active_bits_mtl3;
             }
         }
-        return NULL_MT_FOR_TWIG[nth as usize % stride];
+        return NULL_MT_FOR_TWIG[stride / 2 + _nth];
     }
 
     fn merge_witness(
