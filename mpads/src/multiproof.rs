@@ -1,6 +1,8 @@
-use crate::entry;
+use sha2::digest::typenum::bit;
+
 use crate::utils::hasher;
 use crate::{def::ENTRY_FIXED_LENGTH, entry::EntryBz};
+use crate::{entry, twig};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone)]
@@ -23,10 +25,23 @@ impl IncludedNode {
         }
     }
     pub fn is_leaf(&self) -> bool {
-        if self.level == 8 && self.nth % 16 >= 8 {
-            return true;
-        }
+        self.is_leaf_entry() || self.is_leaf_activebits()
+    }
+
+    pub fn is_leaf_entry(&self) -> bool {
         self.level == 0 && self.nth % 4096 < 2048
+    }
+
+    pub fn is_leaf_activebits(&self) -> bool {
+        self.level == 8 && self.nth % 16 >= 8
+    }
+
+    pub fn get_entry_sn(&self, bit_idx: u8) -> u64 {
+        if !self.is_leaf_activebits() {
+            panic!("not a leaf activebits");
+        }
+        let twig_id = self.nth / 16;
+        twig_id * 2048 + ((self.nth % 16) - 8) * 256 + bit_idx as u64
     }
 }
 
@@ -281,7 +296,21 @@ pub fn verify_entries(
 pub fn get_changed_sn(witness: &Vec<IncludedNode>) -> (Vec<u64>, Vec<u64>) {
     let mut actived_sn_vec = Vec::<u64>::new();
     let mut deactived_sn_vec = Vec::<u64>::new();
-    todo!();
+    for item in witness {
+        if item.is_leaf_activebits() {
+            for i in 0..256 {
+                let old_bit = (item.old_value[i / 8] >> (i % 8)) & 1;
+                let new_bit = (item.new_value[i / 8] >> (i % 8)) & 1;
+
+                let sn = item.get_entry_sn(i as u8);
+                if old_bit == 1 && new_bit == 0 {
+                    deactived_sn_vec.push(sn);
+                } else if old_bit == 0 && new_bit == 1 {
+                    actived_sn_vec.push(sn);
+                }
+            }
+        }
+    }
     (actived_sn_vec, deactived_sn_vec)
 }
 
@@ -460,10 +489,14 @@ mod tests {
         let witness_offsets = get_witness_offsets(&witness, &leaves);
         let b = verify_entries(9787 as u64 + 1, &entries, &witness_offsets, &witness);
         assert!(b);
+
+        let (actived_sn_vec, deactived_sn_vec) = get_changed_sn(&witness);
+        println!("{:?}", actived_sn_vec);
+        println!("{:?}", deactived_sn_vec);
     }
 
     #[test]
-    fn test() {
+    fn test_get_changed_sn() {
         let leaves = vec![0];
         let included_nodes = get_included_nodes(15, &leaves);
         println!("{:?}", included_nodes);
