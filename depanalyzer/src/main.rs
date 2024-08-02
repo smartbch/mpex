@@ -15,6 +15,8 @@ use std::{
 };
 use std::time::Instant;
 
+const MIN_BUNDLE_SIZE: usize = 8;
+
 #[cfg(feature = "aggregate_tx")]
 const MAX_TX_IN_TASK: usize = 4;
 
@@ -324,7 +326,7 @@ impl Scheduler {
 }
 
 impl Scheduler {
-    pub fn largest_bundle(&self) -> usize {
+    pub fn largest_bundle(&self) -> (usize, usize) {
         let mut largest_size = 0;
         let mut largest_id = 0;
         for i in 0..self.num_sets {
@@ -333,7 +335,7 @@ impl Scheduler {
                 largest_id = i;
             }
         }
-        largest_id
+        (largest_id, largest_size)
     }
 
     fn flush_all(&mut self, total_bundle: &mut usize) {
@@ -360,13 +362,13 @@ impl Scheduler {
 
     fn flush_bundle(&mut self, bundle_id: usize) {
         let target = self.bundles.get_mut(bundle_id).unwrap();
-        target.truncate(0);
-        // //println!("AA BeginBundle size={}", target.len());
+        println!("AA BeginBundle size={}", target.len());
         // while target.len() != 0 {
         //     let (txid, _access_set) = target.pop_front().unwrap();
         //     //println!("{:?}", txid);
         // }
         // //println!("EndBundle");
+        target.truncate(0);
     }
 
     fn add_access_set(&mut self, txid: String, access_set: Box<AccessSet>, total_bundle: &mut usize) {
@@ -376,7 +378,14 @@ impl Scheduler {
         // if we cannot find a bundle to insert task because
         // it collides with all the bundles
         if bundle_id == self.num_sets {
-            bundle_id = self.largest_bundle();
+            let mut size;
+            (bundle_id, size) = self.largest_bundle();
+            if cfg!(feature = "giveup_too_many_dep") {
+                if size < MIN_BUNDLE_SIZE {
+                    println!("Giveup {}", txid);
+                    return
+                }
+            }
             self.pb.clear(bundle_id);
             self.flush_bundle(bundle_id);
             *total_bundle += 1;

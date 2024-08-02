@@ -22,4 +22,5 @@ aggregate_tx = []
 uni_set = []
 ignore_weth = []
 test_speed = []
+giveup_too_many_dep = []
 
