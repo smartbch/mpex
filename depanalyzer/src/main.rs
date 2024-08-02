@@ -2,6 +2,7 @@ use byteorder::{BigEndian, ByteOrder};
 use exepipe::exetask::AccessSet;
 use exepipe::scheduler::{PBElement, ParaBloom, MAX_TASKS_LEN_IN_BUNDLE, SET_MAX_SIZE};
 use mpads::utils::hasher;
+use mpads::twig::Twig;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -39,6 +40,9 @@ fn main() {
         run_serial_issuer();
     }
     //run_aggregate_tx();
+ 
+    //allocate_twigs(1024*1024);
+    //allocate_twig_boxes(1024*1024);
 }
 
 
@@ -596,3 +600,18 @@ pub fn test_scheduler_speed() {
     println!("Elapsed: {:.2?}", elapsed);
     println!("Speed: {:.2?}", (size as f64)*1e9/(elapsed.as_nanos() as f64));
 }
+
+fn allocate_twigs(count: u64) {
+    let mut twig_map = HashMap::<u64, Twig>::new();
+    for i in 0..count {
+        twig_map.insert(i, Twig::new());
+    }
+}
+
+fn allocate_twig_boxes(count: u64) {
+    let mut twig_map = HashMap::<u64, Box<Twig>>::new();
+    for i in 0..count {
+        twig_map.insert(i, Box::new(Twig::new()));
+    }
+}
+
