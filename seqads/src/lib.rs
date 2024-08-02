@@ -9,25 +9,25 @@ use std::sync::{Arc, RwLock};
 use mpads::AdsCore;
 use mpads::changeset::ChangeSet;
 use mpads::def::{CODE_PATH, SHARD_COUNT};
-use mpads::entry::Entry;
 use mpads::entrycache::EntryCache;
 use mpads::entryfile::{EntryFile};
 use mpads::indexer::{BTreeIndexer, CodeIndexer};
 use mpads::metadb::{MetaDB};
 use crate::entry_flusher::{CodeFlusherShard, EntryFlusher, FlusherShard};
 use crate::entry_loader::EntryLoader;
-use crate::entry_updater::EntryUpdater;
+use crate::entry_updater::{CodeUpdater, EntryUpdater};
 
 pub struct SeqAds {
     write_buf_size: usize,
     entry_files: Vec<Arc<EntryFile>>,
-    indexer: Arc<BTreeIndexer>,
+    indexer: Rc<BTreeIndexer>,
     code_file: Arc<EntryFile>,
-    code_indexer: CodeIndexer,
+    code_indexer: Rc<CodeIndexer>,
     meta_db: Arc<RwLock<MetaDB>>,
     entry_cache: EntryCache,
     entry_loaders: Vec<EntryLoader>,
     entry_updaters: Vec<Rc<RefCell<EntryUpdater>>>,
+    code_updater: Rc<CodeUpdater>,
     entry_flusher: EntryFlusher,
 }
 
@@ -45,7 +45,7 @@ impl SeqAds {
             file_segment_size as i64,
             code_dir,
         ));
-        let code_indexer = CodeIndexer::new();
+        let code_indexer = Rc::new(CodeIndexer::new());
         AdsCore::index_code(&code_file, &code_indexer);
 
         let code_shard = Some(Box::new(CodeFlusherShard::new(
@@ -53,7 +53,7 @@ impl SeqAds {
             write_buf_size,
         )));
 
-        let indexer = Arc::new(BTreeIndexer::new(1 << 16));
+        let indexer = Rc::new(BTreeIndexer::new(1 << 16));
 
         let meta_dir = dir.to_owned() + "/metadb";
         let meta = MetaDB::new_with_dir(&meta_dir);
@@ -88,6 +88,8 @@ impl SeqAds {
             entry_updaters.push(updater);
         }
 
+        let code_updater = Rc::new(CodeUpdater::new(code_indexer.clone()));
+
         let flusher = EntryFlusher::new(
             shards,
             code_shard,
@@ -108,6 +110,7 @@ impl SeqAds {
             entry_cache: EntryCache::new(),
             entry_loaders,
             entry_updaters,
+            code_updater,
             entry_flusher: flusher,
         };
         seq_ads

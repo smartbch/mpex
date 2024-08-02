@@ -1,33 +1,111 @@
+use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::Arc;
 use byteorder::{BigEndian, ByteOrder};
 use mpads::changeset::ChangeSet;
-use mpads::def::{DEFAULT_ENTRY_SIZE, OP_WRITE, OP_CREATE, OP_DELETE};
+use mpads::def::{DEFAULT_ENTRY_SIZE, OP_WRITE, OP_CREATE, OP_DELETE, CODE_SHARD_ID};
 use mpads::entry::{Entry, EntryBz};
 use mpads::entrycache::EntryCache;
 use mpads::entryfile::EntryFile;
-use mpads::indexer::BTreeIndexer;
+use mpads::indexer::{BTreeIndexer, CodeIndexer};
 use mpads::refdb::OpRecord;
-use mpads::utils::hasher;
+use mpads::utils::{hasher};
 
 pub struct UpdateBuffer {
-
+    pub entry_map :HashMap<i64, Vec<u8>>,
+    pub start: i64,
+    pub end : i64
 }
 
 impl UpdateBuffer {
     pub fn new() -> Self {
-        return Self{}
+        return Self{
+            entry_map: Default::default(),
+            start: -1,
+            end: -1,
+        }
     }
-    pub fn get_entry_bz_at<F>(&mut self, file_pos: i64, access: F) -> (bool, bool)
+    pub fn get_entry_bz_at<F>(&mut self, file_pos: i64, mut access: F) -> bool
     where
         F: FnMut(EntryBz) {
-        //todo:
-        return (false, false)
+        if file_pos < self.start {
+            return true // in disk
+        }
+        if file_pos > self.end {
+            panic!("file_pose exceed self.end")
+        }
+        let entry_bz = EntryBz{
+            bz: self.entry_map.get(&file_pos).unwrap(),
+        };
+        access(entry_bz);
+        return false
+    }
+
+    pub fn append(&mut self, entry: &Entry, deactived_serial_num_list: &[u64]) -> i64 {
+        let size = entry.get_serialized_len(deactived_serial_num_list.len());
+        let mut e = Vec::with_capacity(size);
+        entry.dump(&mut e, deactived_serial_num_list);
+        if self.end == -1 {
+            self.end = self.start;
+        } else {
+            self.end = self.end + size as i64;
+        }
+        self.entry_map.insert(self.end, e);
+        self.end
+    }
+
+    pub fn get_all_entry_bz(&self) -> Vec<EntryBz> {
+        let mut res = vec![];
+        for value in self.entry_map.values() {
+            let entry_bz = EntryBz{
+                bz: value,
+            };
+            res.push(entry_bz);
+        }
+        return res
+    }
+}
+
+pub struct CodeUpdater {
+    pub update_buffer: UpdateBuffer,
+    pub indexer: Rc<CodeIndexer>,
+}
+
+impl CodeUpdater {
+    pub fn new(indexer:Rc<CodeIndexer>) -> Self {
+        return Self{
+            update_buffer:UpdateBuffer::new(),
+            indexer,
+        }
+    }
+    pub fn run_task(&mut self, task_id:i64, change_sets: &Vec<ChangeSet>) {
+        for change_set in change_sets {
+            change_set.run_in_shard(CODE_SHARD_ID, |op, _kh, k, v, _r| match op {
+                OP_CREATE => self.create_kv(task_id, k, v),
+                _ => {
+                    panic!("CodeUpdater: unsupported operation");
+                }
+            });
+        }
+    }
+
+    fn create_kv(&mut self, task_id: i64, code_hash: &[u8], value: &[u8]) {
+        let new_entry = Entry {
+            key: &[0u8],
+            value: value,
+            next_key_hash: code_hash,
+            version: task_id,
+            last_version: -1,
+            serial_number: 0,
+        };
+        let new_pos = self.update_buffer.append(&new_entry, &[]);
+        self.indexer.add_kv(code_hash, new_pos);
     }
 }
 
 pub struct EntryUpdater {
     shard_id: usize,
-    indexer: Arc<BTreeIndexer>,
+    indexer: Rc<BTreeIndexer>,
 
     cache: Arc<EntryCache>,
     entry_file: Arc<EntryFile>,
@@ -43,7 +121,7 @@ impl EntryUpdater {
     pub fn new(
         shard_id: usize,
         entry_file: Arc<EntryFile>,
-        indexer: Arc<BTreeIndexer>,
+        indexer: Rc<BTreeIndexer>,
         curr_version: i64,
         sn_end: u64,
     ) -> Self {
@@ -235,8 +313,7 @@ impl EntryUpdater {
     }
 
     pub fn get_all_entry_bz(&self) -> Vec<EntryBz> {
-        //todo:
-        return vec![]
+        return self.update_buffer.get_all_entry_bz();
     }
 
     pub fn read_entry(&mut self, shard_id: usize, file_pos: i64) {
@@ -247,23 +324,20 @@ impl EntryUpdater {
         if cache_hit {
             return;
         }
-        let (in_disk, accessed) = self.update_buffer.get_entry_bz_at(file_pos, |entry_bz| {
+        let in_disk = self.update_buffer.get_entry_bz_at(file_pos, |entry_bz| {
             self.read_entry_buf.resize(0, 0);
             self.read_entry_buf.extend_from_slice(entry_bz.bz);
+            self.cache.insert(shard_id, file_pos, &entry_bz);
         });
-        if accessed {
+        if !in_disk {
             return;
         }
         self.read_entry_buf.resize(DEFAULT_ENTRY_SIZE, 0);
         let ef = &self.entry_file;
-        if in_disk {
-            let size = ef.read_entry(file_pos, &mut self.read_entry_buf[..]);
-            self.read_entry_buf.resize(size, 0);
-            if self.read_entry_buf.len() < size {
-                ef.read_entry(file_pos, &mut self.read_entry_buf[..]);
-            }
-        } else {
-            panic!("Cannot read the entry");
+        let size = ef.read_entry(file_pos, &mut self.read_entry_buf[..]);
+        self.read_entry_buf.resize(size, 0);
+        if self.read_entry_buf.len() < size {
+            ef.read_entry(file_pos, &mut self.read_entry_buf[..]);
         }
     }
 }

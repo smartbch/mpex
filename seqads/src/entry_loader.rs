@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use std::sync::Arc;
 use mpads::bytescache::new_cache_pos;
 use mpads::changeset::ChangeSet;
@@ -13,7 +14,7 @@ pub struct EntryLoader {
     shard_id : usize,
     entry_file: Arc<EntryFile>,
     cache: Arc<EntryCache>,
-    indexer: Arc<BTreeIndexer>,
+    indexer: Rc<BTreeIndexer>,
     thread_pool: ThreadPool,
 }
 
@@ -22,7 +23,7 @@ impl EntryLoader {
         shard_id : usize,
         entry_file: Arc<EntryFile>,
         cache: Arc<EntryCache>,
-        indexer: Arc<BTreeIndexer>,
+        indexer: Rc<BTreeIndexer>,
     ) -> Self {
         let thread_pool = ThreadPool::new(3);
         Self {
