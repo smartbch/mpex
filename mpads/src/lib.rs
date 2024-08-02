@@ -130,7 +130,6 @@ impl AdsCore {
         for shard_id in 0..SHARD_COUNT {
             let handle = recover_handles.remove(0);
             let (tree, oldest_active_sn) = handle.join().unwrap();
-
             entry_files.push(tree.entry_file_wr.entry_file.clone());
             shards.push(Box::new(FlusherShard::new(
                 tree,
@@ -162,7 +161,7 @@ impl AdsCore {
         (ads_core, eb_receiver, flusher)
     }
 
-    fn _recover_tree(
+    pub fn _recover_tree(
         meta: Arc<RwLock<MetaDB>>,
         data_dir: String,
         buffer_size: usize,
@@ -203,14 +202,14 @@ impl AdsCore {
         (tree, oldest_active_twig_id, oldest_active_sn)
     }
 
-    fn index_code(code_file: &Arc<EntryFile>, code_indexer: &CodeIndexer) {
+    pub fn index_code(code_file: &Arc<EntryFile>, code_indexer: &CodeIndexer) {
         let mut code_file_rd = EntryFileWithPreReader::new(code_file);
         code_file_rd.scan_entries_lite(0, |_k64, code_hash, pos, _sn| {
             code_indexer.add_kv(code_hash, pos);
         });
     }
 
-    fn index_tree(tree: &Tree, oldest_active_twig_id: u64, indexer: &BTreeIndexer) {
+    pub fn index_tree(tree: &Tree, oldest_active_twig_id: u64, indexer: &BTreeIndexer) {
         tree.scan_entries_lite(oldest_active_twig_id, |k64, _nkh, pos, sn| {
             if tree.get_active_bit(sn) {
                 indexer.add_kv(k64, pos);

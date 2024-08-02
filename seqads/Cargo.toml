@@ -1,0 +1,9 @@
+[package]
+name = "seqads"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+mpads = { path = "../mpads" }
+byteorder = "1.5.0"
+threadpool = "1.8.1"

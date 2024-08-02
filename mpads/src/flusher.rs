@@ -11,12 +11,12 @@ use std::thread;
 type RocksMetaDB = MetaDB;
 
 pub struct BarrierSet {
-    flush_bar: Barrier,
-    metadb_bar: Barrier,
+    pub flush_bar: Barrier,
+    pub metadb_bar: Barrier,
 }
 
 impl BarrierSet {
-    fn new(n: usize) -> Self {
+    pub fn new(n: usize) -> Self {
         Self {
             // "+ 1" for code shard
             flush_bar: Barrier::new(n + 1),
