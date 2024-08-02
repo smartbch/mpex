@@ -317,7 +317,7 @@ pub fn get_changed_sn(witness: &Vec<IncludedNode>) -> (Vec<u64>, Vec<u64>) {
 }
 
 // ----- encode & decode ----
-// level(8) + nth(56) + WitnessOldValueType(2) + old_value
+// level(8) + nth(56) + WitnessOldValueType(1) + old_value(0/32/8)
 enum WitnessOldValueType {
     Null = 0,
     Hash,
