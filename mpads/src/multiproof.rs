@@ -1,9 +1,11 @@
 use sha2::digest::typenum::bit;
 
+use crate::twig::{NULL_ACTIVE_BITS, NULL_MT_FOR_TWIG, NULL_NODE_IN_HIGHER_TREE, NULL_TWIG};
 use crate::utils::hasher;
 use crate::{def::ENTRY_FIXED_LENGTH, entry::EntryBz};
 use crate::{entry, twig};
 use std::collections::{HashMap, HashSet};
+use std::vec;
 
 #[derive(Debug, Clone)]
 struct IncludedNode {
@@ -314,6 +316,125 @@ pub fn get_changed_sn(witness: &Vec<IncludedNode>) -> (Vec<u64>, Vec<u64>) {
     (actived_sn_vec, deactived_sn_vec)
 }
 
+// ----- encode & decode ----
+// level(8) + nth(56) + WitnessOldValueType(2) + old_value
+enum WitnessOldValueType {
+    Null = 0,
+    Hash,
+    EntryIndex,
+}
+
+impl TryFrom<u8> for WitnessOldValueType {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(WitnessOldValueType::Null),
+            1 => Ok(WitnessOldValueType::Hash),
+            2 => Ok(WitnessOldValueType::EntryIndex),
+            _ => Err(()),
+        }
+    }
+}
+
+fn encode_witness(witness: &Vec<IncludedNode>, entries: &Vec<EntryBz>) -> Vec<u8> {
+    let mut leaf_to_index_list = HashMap::new();
+    for (i, entry) in entries.iter().enumerate() {
+        let sn = entry.serial_number() as u64;
+        leaf_to_index_list.insert(sn_to_leaf(sn), i as u64);
+    }
+
+    let mut bz = vec![];
+    for item in witness {
+        let level_nth = (item.level as u64) << 56 | item.nth;
+        bz.extend(level_nth.to_be_bytes());
+        // todo use current sn calculate
+        if item.old_value == get_null_hash_by_pos(item.level, item.nth) {
+            bz.push(WitnessOldValueType::Null as u8);
+        } else if let Some(idx) = leaf_to_index_list.get(&item.nth) {
+            bz.push(WitnessOldValueType::EntryIndex as u8);
+            bz.extend(idx.to_be_bytes());
+        } else {
+            bz.push(WitnessOldValueType::Hash as u8);
+            bz.extend(&item.old_value);
+        }
+    }
+    bz
+}
+
+fn decode_witness(witness_bz: &Vec<u8>, entries: &Vec<EntryBz>) -> Vec<IncludedNode> {
+    let mut witness = vec![];
+    let mut idx = 0;
+    loop {
+        let mut level_nth = [0u8; 8];
+        idx += 8;
+        level_nth.copy_from_slice(&witness_bz[idx..idx + 8]);
+        let level_nth = u64::from_be_bytes(level_nth);
+        let level = (level_nth >> 56) as u8;
+        let nth = level_nth & 0x00FF_FFFF_FFFF_FFFF;
+
+        let old_value_type = witness_bz[idx];
+        idx += 1;
+        let old_value = match WitnessOldValueType::try_from(old_value_type) {
+            Ok(WitnessOldValueType::Null) => get_null_hash_by_pos(level, nth),
+            Ok(WitnessOldValueType::Hash) => {
+                let mut hash = [0u8; 32];
+                hash.copy_from_slice(&witness_bz[idx..idx + 32]);
+                idx += 32;
+                hash
+            }
+            Ok(WitnessOldValueType::EntryIndex) => {
+                let mut entry_idx = [0u8; 8];
+                entry_idx.copy_from_slice(&witness_bz[idx..idx + 8]);
+                idx += 8;
+                let entry_idx = u64::from_be_bytes(entry_idx);
+                entries[entry_idx as usize].hash()
+            }
+            _ => panic!("invalid old_value_type"),
+        };
+        witness.push(IncludedNode {
+            old_value,
+            new_value: get_null_hash_by_pos(level, nth),
+            level,
+            nth,
+        });
+        if idx >= witness_bz.len() {
+            break;
+        }
+    }
+    witness
+}
+
+fn get_null_hash_by_pos(level: u8, nth: u64) -> [u8; 32] {
+    if level > 12 {
+        return NULL_NODE_IN_HIGHER_TREE[level as usize];
+    }
+
+    let stride = 1 << (12 - level) as usize;
+    let _nth = nth as usize % stride;
+    if level == 12 {
+        return NULL_TWIG.twig_root;
+    }
+    if level == 11 && _nth == 0 {
+        return NULL_TWIG.left_root;
+    }
+    if _nth >= stride / 2 {
+        if level == 8 {
+            return NULL_ACTIVE_BITS.get_bits(_nth - 8, 32).try_into().unwrap();
+        }
+        if level == 9 {
+            return NULL_TWIG.active_bits_mtl1[_nth - 4];
+        }
+        if level == 10 {
+            return NULL_TWIG.active_bits_mtl2[_nth - 2];
+        }
+        if level == 11 {
+            return NULL_TWIG.active_bits_mtl3;
+        }
+    }
+    return NULL_MT_FOR_TWIG[stride / 2 + _nth];
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
@@ -332,7 +453,7 @@ mod tests {
         twig::{NULL_ACTIVE_BITS, NULL_MT_FOR_TWIG, NULL_NODE_IN_HIGHER_TREE, NULL_TWIG},
     };
 
-    use super::IncludedNode;
+    use super::{get_null_hash_by_pos, IncludedNode};
 
     #[test]
     fn test_get_included_nodes() {
@@ -529,36 +650,6 @@ mod tests {
         (tree, pos_list, serial_number, entry_bzs)
     }
 
-    fn get_null_hash_by_level(level: u8, nth: u64) -> [u8; 32] {
-        if level > 12 {
-            return NULL_NODE_IN_HIGHER_TREE[level as usize];
-        }
-
-        let stride = 1 << (12 - level) as usize;
-        let _nth = nth as usize % stride;
-        if level == 12 {
-            return NULL_TWIG.twig_root;
-        }
-        if level == 11 && _nth == 0 {
-            return NULL_TWIG.left_root;
-        }
-        if _nth >= stride / 2 {
-            if level == 8 {
-                return NULL_ACTIVE_BITS.get_bits(_nth - 8, 32).try_into().unwrap();
-            }
-            if level == 9 {
-                return NULL_TWIG.active_bits_mtl1[_nth - 4];
-            }
-            if level == 10 {
-                return NULL_TWIG.active_bits_mtl2[_nth - 2];
-            }
-            if level == 11 {
-                return NULL_TWIG.active_bits_mtl3;
-            }
-        }
-        return NULL_MT_FOR_TWIG[stride / 2 + _nth];
-    }
-
     fn fill_witness_value(
         witness: &mut Vec<IncludedNode>,
         pre_proof_map: HashMap<NodePos, [u8; 32]>,
@@ -571,7 +662,7 @@ mod tests {
                 item.old_value.copy_from_slice(old_value);
                 // println!("old_value1: {:?}", old_value);
             } else {
-                let old_value = get_null_hash_by_level(item.level, item.nth);
+                let old_value = get_null_hash_by_pos(item.level, item.nth);
                 // println!("old_value2: {:?}", old_value);
                 item.old_value.copy_from_slice(&old_value);
             }
