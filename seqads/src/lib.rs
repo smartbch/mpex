@@ -62,10 +62,10 @@ impl SeqAds {
         let mut entry_files = Vec::with_capacity(SHARD_COUNT);
         let mut shards: Vec<Box<FlusherShard>> = Vec::with_capacity(SHARD_COUNT);
         let mut entry_updaters = Vec::<Rc<RefCell<EntryUpdater>>>::with_capacity(SHARD_COUNT);
-
+        let meta = Arc::new(RwLock::new(meta));
         for shard_id in 0..SHARD_COUNT {
-            let (tree, oldest_active_twig_id, oldest_active_sn) = AdsCore::recover_tree(
-                &meta,
+            let (tree, oldest_active_twig_id, oldest_active_sn) = AdsCore::_recover_tree(
+                meta.clone(),
                 data_dir.clone(),
                 write_buf_size,
                 file_segment_size,
@@ -77,7 +77,7 @@ impl SeqAds {
 
             let entry_file = tree.entry_file_wr.entry_file.clone();
             entry_files.push(entry_file.clone());
-            let sn_end = meta.get_next_serial_num(shard_id);
+            let sn_end = meta.clone().read().unwrap().get_next_serial_num(shard_id);
             let updater = Rc::new(RefCell::new(EntryUpdater::new(shard_id, entry_file.clone(), indexer.clone(), -1, sn_end)));
             shards.push(Box::new(FlusherShard::new(
                 tree,
@@ -88,7 +88,6 @@ impl SeqAds {
             entry_updaters.push(updater);
         }
 
-        let meta = Arc::new(RwLock::new(meta));
         let flusher = EntryFlusher::new(
             shards,
             code_shard,
