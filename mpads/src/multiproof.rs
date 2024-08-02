@@ -475,7 +475,7 @@ mod tests {
         let included_nodes = get_included_nodes(15, &leaves);
         // TODO level 不一样
         let mut witness = get_witness(&included_nodes, 15);
-        merge_witness(&mut witness, pre_proof_map, post_proof_map);
+        fill_witness_value(&mut witness, pre_proof_map, post_proof_map);
 
         verify_witness(&witness, &[0; 32], &[0; 32]);
         let mut entries = vec![];
@@ -559,7 +559,7 @@ mod tests {
         return NULL_MT_FOR_TWIG[stride / 2 + _nth];
     }
 
-    fn merge_witness(
+    fn fill_witness_value(
         witness: &mut Vec<IncludedNode>,
         pre_proof_map: HashMap<NodePos, [u8; 32]>,
         post_proof_map: HashMap<NodePos, [u8; 32]>,
