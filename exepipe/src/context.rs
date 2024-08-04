@@ -3,7 +3,7 @@ use crate::exetask::{
     READ_SLOT, WRITE_ACC, WRITE_SLOT,
 };
 use crate::statecache::{CodeMap, StateCache};
-use crate::utils::{addr_to_u256, decode_account_info, is_empty_code_hash, AtomicU256};
+use crate::utils::{addr_to_u256, decode_account_info, is_empty_code_hash, join_address_index, AtomicU256};
 use anyhow::{anyhow, Result};
 use bincode;
 use mpads::changeset::ChangeSet;
@@ -66,10 +66,7 @@ impl<'a, T: ADS> Database for TxContext<'a, T> {
     }
 
     fn storage(&mut self, address: Address, index: U256) -> Result<U256> {
-        let mut addr_idx = [0u8; 20 + 32];
-        addr_idx[..20].copy_from_slice(&address[..]);
-        let index_arr: [u8; 32] = index.to_be_bytes();
-        addr_idx[20..].copy_from_slice(&index_arr[..]);
+        let addr_idx = join_address_index(&address, &index);
         let key_hash = hasher::hash(&addr_idx[..]);
         let in_rdo = self.access_set.rdo_set.contains(&key_hash);
         let in_rnw = self.access_set.rnw_set.contains(&key_hash);

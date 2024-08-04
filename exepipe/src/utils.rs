@@ -21,6 +21,14 @@ pub fn is_empty_code_hash(code_hash: &FixedBytes<32>) -> bool {
     code_hash == &FixedBytes::<32>::ZERO || code_hash == &KECCAK_EMPTY
 }
 
+pub fn join_address_index(address: &Address, index: &U256) ->  [u8; 20 + 32] {
+    let mut addr_idx = [0u8; 20 + 32];
+    addr_idx[..20].copy_from_slice(&address[..]);
+    let index_arr: [u8; 32] = index.to_be_bytes();
+    addr_idx[20..].copy_from_slice(&index_arr[..]);
+    addr_idx
+}
+
 pub struct AtomicU256 {
     limbs: [AtomicU64; 4],
 }
