@@ -1,9 +1,8 @@
-
 use crate::def::TWIG_SHIFT;
+use crate::entry::EntryBz;
 use crate::tree::{calc_max_level, Tree};
 use crate::twig::{NULL_ACTIVE_BITS, NULL_MT_FOR_TWIG, NULL_NODE_IN_HIGHER_TREE, NULL_TWIG};
 use crate::utils::hasher;
-use crate::entry::EntryBz;
 use std::collections::{HashMap, HashSet};
 use std::vec;
 
@@ -244,11 +243,7 @@ fn get_witness_offsets(witness: &Witness, leaves: &Vec<u64>) -> Vec<(usize, usiz
 // ====== Consume the witness data =========
 
 // check the integrity and correctness of witness
-pub fn verify_witness(
-    witness: &Witness,
-    old_root: &[u8; 32],
-    new_root: &[u8; 32],
-) -> bool {
+pub fn verify_witness(witness: &Witness, old_root: &[u8; 32], new_root: &[u8; 32]) -> bool {
     let mut stack = Vec::<MultiProofNode>::new();
     let mut idx = 0;
     loop {
@@ -381,33 +376,51 @@ impl TryFrom<u8> for WitnessOldValueType {
     }
 }
 
-pub fn decode_witness(witness_bz: &Vec<u8>, entries: &Vec<EntryBz>) -> Witness {
+fn get_witness_bz_slice(witness_bz: &Vec<u8>, start: usize, end: usize) -> Result<&[u8], String> {
+    if end > witness_bz.len() {
+        return Err(format!("end({}) >= witness_bz.len()", end));
+    }
+    Ok(&witness_bz[start..end])
+}
+
+pub fn decode_witness(
+    witness_bz: &Vec<u8>,
+    entries: &Vec<EntryBz>,
+) -> Result<Vec<MultiProofNode>, String> {
     let mut witness = vec![];
     let mut idx = 0;
     loop {
-        let level = u8::from_be_bytes(witness_bz[idx..idx + 1].try_into().unwrap());
+        let level = u8::from_be_bytes(
+            get_witness_bz_slice(witness_bz, idx, idx + 1)?
+                .try_into()
+                .unwrap(),
+        );
         idx += 1;
-        let nth = u64::from_be_bytes(witness_bz[idx..idx + 8].try_into().unwrap());
+        let nth = u64::from_be_bytes(
+            get_witness_bz_slice(witness_bz, idx, idx + 8)?
+                .try_into()
+                .unwrap(),
+        );
         idx += 8;
 
-        let old_value_type = witness_bz[idx];
+        let old_value_type = get_witness_bz_slice(witness_bz, idx, idx + 1)?[0];
         idx += 1;
         let old_value = match WitnessOldValueType::try_from(old_value_type) {
             Ok(WitnessOldValueType::Null) => get_null_hash_by_pos(level, nth),
             Ok(WitnessOldValueType::Hash) => {
                 let mut hash = [0u8; 32];
-                hash.copy_from_slice(&witness_bz[idx..idx + 32]);
+                hash.copy_from_slice(get_witness_bz_slice(witness_bz, idx, idx + 32)?);
                 idx += 32;
                 hash
             }
             Ok(WitnessOldValueType::EntryIndex) => {
                 let mut entry_idx = [0u8; 8];
-                entry_idx.copy_from_slice(&witness_bz[idx..idx + 8]);
+                entry_idx.copy_from_slice(get_witness_bz_slice(witness_bz, idx, idx + 8)?);
                 idx += 8;
                 let entry_idx = u64::from_be_bytes(entry_idx);
                 entries[entry_idx as usize].hash()
             }
-            _ => panic!("invalid old_value_type"),
+            _ => return Err("Invalid old_value_type".to_string()),
         };
         witness.push(MultiProofNode {
             old_value,
@@ -419,7 +432,7 @@ pub fn decode_witness(witness_bz: &Vec<u8>, entries: &Vec<EntryBz>) -> Witness {
             break;
         }
     }
-    witness
+    Ok(witness)
 }
 
 fn get_null_hash_by_pos(level: u8, nth: u64) -> [u8; 32] {
@@ -565,7 +578,7 @@ mod tests {
                 .iter()
                 .map(|bz| EntryBz { bz: &bz })
                 .collect();
-            let mut _witness = decode_witness(&witness_bz, &input_entries);
+            let mut _witness = decode_witness(&witness_bz, &input_entries).unwrap();
             // fill witness new_value
             let pos_list: Vec<(u8, u64)> =
                 _witness.iter().map(|item| (item.level, item.nth)).collect();
@@ -610,7 +623,7 @@ mod tests {
             entries.push(entry);
         }
         let bz = encode_witness(&witness, &entries);
-        let witness2 = decode_witness(&bz, &entries);
+        let witness2 = decode_witness(&bz, &entries).unwrap();
         for (i, item) in witness.iter().enumerate() {
             assert_eq!(item.old_value, witness2[i].old_value);
             assert_eq!(item.old_value, witness2[i].new_value);
