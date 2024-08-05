@@ -366,10 +366,8 @@ fn decode_witness(witness_bz: &Vec<u8>, entries: &Vec<EntryBz>) -> Vec<IncludedN
     let mut witness = vec![];
     let mut idx = 0;
     loop {
-        let mut level_nth = [0u8; 8];
+        let level_nth = u64::from_be_bytes(witness_bz[idx..idx + 8].try_into().unwrap());
         idx += 8;
-        level_nth.copy_from_slice(&witness_bz[idx..idx + 8]);
-        let level_nth = u64::from_be_bytes(level_nth);
         let level = (level_nth >> 56) as u8;
         let nth = level_nth & 0x00FF_FFFF_FFFF_FFFF;
 
