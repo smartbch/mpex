@@ -22,7 +22,7 @@ impl ProvingCtx {
     fn new(entries: &Vec<EntryBz>) -> Self {
         let mut entry_map = HashMap::new();
         for entry in entries {
-            entry_map.insert(entry.hash(), entry.bz.to_vec());
+            entry_map.insert(entry.key_hash(), entry.bz.to_vec());
         }
 
         ProvingCtx { entry_map }
@@ -87,11 +87,32 @@ fn verify_witness(witness: Witness) {}
 
 #[cfg(test)]
 mod tests {
+    use mpads::test_helper::EntryBuilder;
+    use revm::primitives::address;
+
+    use crate::test_helper::encode_account_info;
+
     use super::*;
 
     #[test]
-    fn test_xxx() {
-        let entries = vec![];
-        let ctx = ProvingCtx::new(&entries);
+    fn test_proving_ctx_basic() {
+        let a1 = address!("0000000000000000000000000000000000000001");
+
+        let bz1 = EntryBuilder::kv(
+            a1.to_vec(),
+            encode_account_info(&AccountInfo {
+                balance: U256::ZERO,
+                nonce: 123,
+                code_hash: B256::ZERO,
+                code: Option::None,
+            }),
+        )
+        .build_and_dump(&[]);
+        let entry1 = EntryBz { bz: &bz1 };
+        let entries = vec![entry1];
+
+        let mut ctx = ProvingCtx::new(&entries);
+        let acc1 = ctx.basic(a1).unwrap().unwrap();
+        assert_eq!(acc1.nonce, 123);
     }
 }
