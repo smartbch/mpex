@@ -146,7 +146,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_new_coordinator() {
-        let dir = "./tmp_ads";
+        let dir = "./tmp_ads_new_coordinator";
         let _tmp_dir = TempDir::new(dir);
         let (shared_ads_wrap, tpool, _sender, receiver, s, r) = generate_ads_wrap(dir);
         let blk_ctx = Arc::new(BlockContext::new(shared_ads_wrap));
@@ -161,7 +161,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_start_new_block() {
-        let dir = "./tmp_ads";
+        let dir = "./tmp_ads_new_coordinator";
         let _tmp_dir = TempDir::new(dir);
         let (shared_ads_wrap, tpool, _sender, receiver, s, r) = generate_ads_wrap(dir);
         let blk_ctx = Arc::new(BlockContext::new(shared_ads_wrap));
@@ -177,7 +177,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_read_from_scheduled_chan() {
-        let dir = "./tmp_ads";
+        let dir = "./tmp_ads_new_coordinator";
         let _tmp_dir = TempDir::new(dir);
         let (shared_ads_wrap, tpool, sender, receiver, s, r) = generate_ads_wrap(dir);
         let blk_ctx = Arc::new(BlockContext::new(shared_ads_wrap));
@@ -198,7 +198,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_read_from_executed_chan() {
-        let dir = "./tmp_ads";
+        let dir = "./tmp_ads_new_coordinator";
         let _tmp_dir = TempDir::new(dir);
         let (shared_ads_wrap, tpool, _sender, receiver, s, r) = generate_ads_wrap(dir);
         let blk_ctx = Arc::new(BlockContext::new(shared_ads_wrap));
@@ -215,7 +215,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_try_issue() {
-        let dir = "./tmp_ads";
+        let dir = "./tmp_ads_new_coordinator";
         let _tmp_dir = TempDir::new(dir);
         let (shared_ads_wrap, tpool, _sender, receiver, s, r) = generate_ads_wrap(dir);
         let mut blk_ctx = BlockContext::new(shared_ads_wrap);
@@ -256,7 +256,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_run() {
-        let dir = "./tmp_ads";
+        let dir = "./tmp_ads_new_coordinator";
         let _tmp_dir = TempDir::new(dir);
         let (shared_ads_wrap, tpool, sender, receivers, s, r) = generate_ads_wrap(dir);
         let mut blk_ctx = BlockContext::new(shared_ads_wrap);
@@ -314,7 +314,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_run_when_zero_task_in() {
-        let dir = "./tmp_ads";
+        let dir = "./tmp_ads_new_coordinator";
         let _tmp_dir = TempDir::new(dir);
         let (shared_ads_wrap, tpool, sender, receivers, s, r) = generate_ads_wrap(dir);
         let mut blk_ctx = BlockContext::new(shared_ads_wrap);

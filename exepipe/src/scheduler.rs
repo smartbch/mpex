@@ -448,7 +448,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_scheduler_new() {
-        let dir = "./tmp_ads";
+        let dir = "./tmp_ads_scheduler";
         let _tmp_dir = TempDir::new(dir);
         let (shared_ads_wrap, tpool, sender, _, s, _) = generate_ads_wrap(dir);
         let blk_ctx = Arc::new(BlockContext::new(shared_ads_wrap));
@@ -464,7 +464,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_start_new_block() {
-        let dir = "./tmp_ads";
+        let dir = "./tmp_ads_scheduler";
         let _tmp_dir = TempDir::new(dir);
         let (shared_ads_wrap, tpool, sender, _, s, _) = generate_ads_wrap(dir);
         let blk_ctx = Arc::new(BlockContext::new(shared_ads_wrap));
@@ -481,7 +481,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_add_task_not_collide() {
-        let dir = "./tmp_ads";
+        let dir = "./tmp_ads_scheduler";
         let _tmp_dir = TempDir::new(dir);
         let (shared_ads_wrap, tpool, sender, _, s, _) = generate_ads_wrap(dir);
         let blk_ctx = Arc::new(BlockContext::new(shared_ads_wrap));
@@ -514,7 +514,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_add_task_collide() {
-        let dir = "./tmp_ads";
+        let dir = "./tmp_ads_scheduler";
         let _tmp_dir = TempDir::new(dir);
         let (shared_ads_wrap, tpool, sender, _, s, _) = generate_ads_wrap(dir);
         let blk_ctx = Arc::new(BlockContext::new(shared_ads_wrap));
@@ -547,7 +547,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_add_task_collide_with_all_bundles() {
-        let dir = "./tmp_ads";
+        let dir = "./tmp_ads_scheduler";
         let _tmp_dir = TempDir::new(dir);
         let (shared_ads_wrap, tpool, sender, receiver, s, r) = generate_ads_wrap(dir);
 
@@ -654,7 +654,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_flush_all_bundle_tasks() {
-        let dir = "./tmp_ads";
+        let dir = "./tmp_ads_scheduler";
         let _tmp_dir = TempDir::new(dir);
         let (shared_ads_wrap, tpool, sender, _receiver, s, r) = generate_ads_wrap(dir);
 
@@ -691,7 +691,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_add_tasks() {
-        let dir = "./tmp_ads";
+        let dir = "./tmp_ads_scheduler";
         let _tmp_dir = TempDir::new(dir);
         let (shared_ads_wrap, tpool, sender, _receiver, s, r) = generate_ads_wrap(dir);
 
