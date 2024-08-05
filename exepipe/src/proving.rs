@@ -74,11 +74,11 @@ impl Database for ProvingCtx {
 // TODO
 struct Witness {}
 
-fn validate(task: ExecTask, witness: Witness, entries: Vec<Vec<u8>>) {}
+fn validate(task: ExeTask, witness: Witness, entries: Vec<Vec<u8>>) {}
 
 fn verify_entries(witness: Witness, entries: Vec<Vec<u8>>) {}
 
-fn exec_task(task: ExecTask, entries: Vec<Vec<u8>>) {}
+fn exec_task(task: ExeTask, entries: Vec<Vec<u8>>) {}
 
 fn apply_change_set(witness: Witness, change_set: ChangeSet) {}
 
