@@ -90,7 +90,7 @@ pub struct UpperTree {
     // this variable can be recovered from saved edge nodes and activeTwigs
     pub nodes: Vec<Vec<HashMap<NodePos, [u8; 32]>>>, //MaxUpperLevel*NodeShardCount maps
     // this variable can be recovered from entry file
-    pub active_twig_shards: Vec<HashMap<u64, twig::Twig>>, //TwigShardCount maps
+    pub active_twig_shards: Vec<HashMap<u64, Box<twig::Twig>>> , //TwigShardCount maps
 }
 
 impl UpperTree {
@@ -105,7 +105,7 @@ impl UpperTree {
     pub fn new(my_shard_id: usize) -> Self {
         let node_shards = vec![HashMap::<NodePos, [u8; 32]>::new(); NODE_SHARD_COUNT];
         let nodes = vec![node_shards; MAX_TREE_LEVEL];
-        let active_twig_shards = vec![HashMap::<u64, twig::Twig>::new(); TWIG_SHARD_COUNT];
+        let active_twig_shards = vec![HashMap::<u64, Box<twig::Twig>>::new(); TWIG_SHARD_COUNT];
 
         Self {
             my_shard_id,
@@ -118,14 +118,14 @@ impl UpperTree {
         self.nodes.len() == 0
     }
 
-    pub fn add_twigs(&mut self, twig_map: HashMap<u64, twig::Twig>) {
+    pub fn add_twigs(&mut self, twig_map: HashMap<u64, Box<twig::Twig>>) {
         for (twig_id, twig) in twig_map {
             let (shard_idx, key) = get_shard_idx_and_key(twig_id);
             self.active_twig_shards[shard_idx].insert(key, twig);
         }
     }
 
-    pub fn get_twig(&mut self, twig_id: u64) -> Option<&mut twig::Twig> {
+    pub fn get_twig(&mut self, twig_id: u64) -> Option<&mut Box<twig::Twig>> {
         let (shard_idx, key) = get_shard_idx_and_key(twig_id);
         self.active_twig_shards[shard_idx].get_mut(&key)
     }
@@ -436,7 +436,7 @@ pub struct Tree {
     pub my_shard_id: usize,
 
     pub upper_tree: UpperTree,
-    pub new_twig_map: HashMap<u64, twig::Twig>,
+    pub new_twig_map: HashMap<u64, Box<twig::Twig>>,
 
     pub entry_file_wr: EntryFileWriter,
     pub twig_file_wr: TwigFileWriter,

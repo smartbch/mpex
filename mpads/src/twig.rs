@@ -9,7 +9,7 @@ use crate::utils::hasher;
 // global variables
 lazy_static! {
     pub static ref NULL_MT_FOR_TWIG: Box<TwigMT> = get_init_data().0;
-    pub static ref NULL_TWIG: Twig = get_init_data().1;
+    pub static ref NULL_TWIG: Box<Twig>  = get_init_data().1;
     pub static ref NULL_NODE_IN_HIGHER_TREE: [[u8; 32]; 64] = get_init_data().2;
     pub static ref NULL_ACTIVE_BITS: ActiveBits = ActiveBits::new();
 }
@@ -26,7 +26,7 @@ pub struct Twig {
 }
 
 // for initializing null nodes of the merkle tree
-fn get_init_data() -> (Box<TwigMT>, Twig, [Hash32; 64]) {
+fn get_init_data() -> (Box<TwigMT>, Box<Twig>, [Hash32; 64]) {
     // null left tree in twig:
     let null_mt_for_twig = create_null_mt_for_twig();
     // null right tree in twig:
@@ -50,8 +50,8 @@ fn create_null_mt_for_twig() -> Box<TwigMT> {
     null_mt_for_twig
 }
 
-fn create_null_twig(null_mt_for_twig: Hash32) -> Twig {
-    let mut null_twig = Twig::new();
+fn create_null_twig(null_mt_for_twig: Hash32) -> Box<Twig> {
+    let mut null_twig = Box::new(Twig::new());
 
     null_twig.sync_l1(0, &NULL_ACTIVE_BITS);
     null_twig.sync_l1(1, &NULL_ACTIVE_BITS);

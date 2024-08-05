@@ -26,8 +26,8 @@ mod tests {
     }
 
     fn compare_twigs(
-        twig_map_a: &Vec<HashMap<u64, Twig>>,
-        twig_map_b: &Vec<HashMap<u64, Twig>>,
+        twig_map_a: &Vec<HashMap<u64, Box<Twig>>>,
+        twig_map_b: &Vec<HashMap<u64, Box<Twig>>>,
         active_bits_a: &Vec<HashMap<u64, ActiveBits>>,
         active_bits_b: &Vec<HashMap<u64, ActiveBits>>,
     ) {
