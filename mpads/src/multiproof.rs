@@ -1,16 +1,16 @@
-use sha2::digest::typenum::bit;
 
 use crate::def::TWIG_SHIFT;
 use crate::tree::{calc_max_level, Tree};
 use crate::twig::{NULL_ACTIVE_BITS, NULL_MT_FOR_TWIG, NULL_NODE_IN_HIGHER_TREE, NULL_TWIG};
 use crate::utils::hasher;
-use crate::{def::ENTRY_FIXED_LENGTH, entry::EntryBz};
-use crate::{entry, twig};
+use crate::entry::EntryBz;
 use std::collections::{HashMap, HashSet};
 use std::vec;
 
+pub type Witness = Vec<MultiProofNode>;
+
 #[derive(Debug, Clone, PartialEq)]
-struct MultiProofNode {
+pub struct MultiProofNode {
     old_value: [u8; 32],
     new_value: [u8; 32],
     level: u8,
@@ -69,7 +69,7 @@ fn leaf_to_nth_for_activebits(leaf: u64) -> u64 {
 // get all the leaf nodes and internal nodes that must be included in
 // the witness data to prove the accessed entries
 // sns should include the serial number of last entry
-pub fn get_witness(sn_list: &Vec<u64>, tree: &Tree) -> Vec<MultiProofNode> {
+pub fn get_witness(sn_list: &Vec<u64>, tree: &Tree) -> Witness {
     let max_sn = sn_list.iter().max().unwrap();
     let max_level = calc_max_level(max_sn >> TWIG_SHIFT) as u8;
     let leaves: Vec<u64> = sn_list.iter().map(|&sn| sn_to_leaf(sn)).collect();
@@ -108,7 +108,7 @@ pub fn get_witness(sn_list: &Vec<u64>, tree: &Tree) -> Vec<MultiProofNode> {
     witness
 }
 
-pub fn encode_witness(witness: &Vec<MultiProofNode>, entries: &Vec<EntryBz>) -> Vec<u8> {
+pub fn encode_witness(witness: &Witness, entries: &Vec<EntryBz>) -> Vec<u8> {
     let mut leaf_to_index_list = HashMap::new();
     for (i, entry) in entries.iter().enumerate() {
         let sn = entry.serial_number() as u64;
@@ -208,7 +208,7 @@ fn _sort_post_list(nodes_set: &HashSet<(u8, u64)>, max_level: u8) -> Vec<(u8, u6
 }
 
 // For each leaf, where to find its own witness and its activebit's witness?
-fn get_witness_offsets(witness: &Vec<MultiProofNode>, leaves: &Vec<u64>) -> Vec<(usize, usize)> {
+fn get_witness_offsets(witness: &Witness, leaves: &Vec<u64>) -> Vec<(usize, usize)> {
     let mut node2idx = HashMap::<(u8, u64), Vec<usize>>::new();
     for (i, leaf) in leaves.iter().enumerate() {
         let entry_key = (0, *leaf);
@@ -245,7 +245,7 @@ fn get_witness_offsets(witness: &Vec<MultiProofNode>, leaves: &Vec<u64>) -> Vec<
 
 // check the integrity and correctness of witness
 pub fn verify_witness(
-    witness: &Vec<MultiProofNode>,
+    witness: &Witness,
     old_root: &[u8; 32],
     new_root: &[u8; 32],
 ) -> bool {
@@ -299,7 +299,7 @@ pub fn verify_entries(
     start_sn_for_new_entry: u64,
     entries: &Vec<EntryBz>,
     witness_offsets: &Vec<(usize, usize)>,
-    witness: &Vec<MultiProofNode>,
+    witness: &Witness,
 ) -> bool {
     if entries.len() != witness_offsets.len() {
         return false;
@@ -339,7 +339,7 @@ pub fn verify_entries(
     true
 }
 
-pub fn get_changed_sn(witness: &Vec<MultiProofNode>) -> (Vec<u64>, Vec<u64>) {
+pub fn get_changed_sn(witness: &Witness) -> (Vec<u64>, Vec<u64>) {
     let mut actived_sn_vec = Vec::<u64>::new();
     let mut deactived_sn_vec = Vec::<u64>::new();
     for item in witness {
@@ -381,7 +381,7 @@ impl TryFrom<u8> for WitnessOldValueType {
     }
 }
 
-pub fn decode_witness(witness_bz: &Vec<u8>, entries: &Vec<EntryBz>) -> Vec<MultiProofNode> {
+pub fn decode_witness(witness_bz: &Vec<u8>, entries: &Vec<EntryBz>) -> Witness {
     let mut witness = vec![];
     let mut idx = 0;
     loop {

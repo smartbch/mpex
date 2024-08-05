@@ -4,6 +4,7 @@ use anyhow::{anyhow, Result};
 use bincode;
 use mpads::changeset::ChangeSet;
 use mpads::entry::{EntryBz, Hash32};
+use mpads::multiproof::Witness;
 use mpads::utils::hasher;
 use revm::db::Database;
 use revm::precompile::primitives::{AccountInfo, Bytecode, B256, U256};
@@ -18,10 +19,13 @@ struct ProvingCtx {
 }
 
 impl ProvingCtx {
-    fn new() -> Self {
-        ProvingCtx {
-            entry_map: HashMap::new(),
+    fn new(entries: &Vec<EntryBz>) -> Self {
+        let mut entry_map = HashMap::new();
+        for entry in entries {
+            entry_map.insert(entry.hash(), entry.bz.to_vec());
         }
+
+        ProvingCtx { entry_map }
     }
 }
 
@@ -71,9 +75,6 @@ impl Database for ProvingCtx {
     }
 }
 
-// TODO
-struct Witness {}
-
 fn validate(task: ExeTask, witness: Witness, entries: Vec<Vec<u8>>) {}
 
 fn verify_entries(witness: Witness, entries: Vec<Vec<u8>>) {}
@@ -90,6 +91,7 @@ mod tests {
 
     #[test]
     fn test_xxx() {
-        let ctx = ProvingCtx::new();
+        let entries = vec![];
+        let ctx = ProvingCtx::new(&entries);
     }
 }
