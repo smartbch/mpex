@@ -4,6 +4,7 @@ pub mod bench;
 pub mod context;
 pub mod coordinator;
 pub mod exetask;
+pub mod proving;
 pub mod scheduler;
 pub mod statecache;
 pub mod test_helper;

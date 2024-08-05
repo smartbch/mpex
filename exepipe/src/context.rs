@@ -3,7 +3,9 @@ use crate::exetask::{
     READ_SLOT, WRITE_ACC, WRITE_SLOT,
 };
 use crate::statecache::{CodeMap, StateCache};
-use crate::utils::{addr_to_u256, decode_account_info, is_empty_code_hash, join_address_index, AtomicU256};
+use crate::utils::{
+    addr_to_u256, decode_account_info, is_empty_code_hash, join_address_index, AtomicU256,
+};
 use anyhow::{anyhow, Result};
 use bincode;
 use mpads::changeset::ChangeSet;
