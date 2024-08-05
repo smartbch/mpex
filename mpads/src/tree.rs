@@ -3,6 +3,8 @@ use std::sync::Arc;
 use std::{fmt, mem};
 use std::{fs, thread};
 
+use rand_core::le;
+
 use crate::def::{
     ENTRIES_PATH, FIRST_LEVEL_ABOVE_TWIG, LEAF_COUNT_IN_TWIG, MAX_TREE_LEVEL, MIN_PRUNE_COUNT,
     NODE_SHARD_COUNT, TWIG_MASK, TWIG_PATH, TWIG_ROOT_LEVEL, TWIG_SHARD_COUNT, TWIG_SHIFT,
@@ -46,12 +48,6 @@ impl NodePos {
         NodePos(pos)
     }
     pub fn pos(level: u64, n: u64) -> NodePos {
-        if level >= u8::MAX as u64 {
-            panic!("level is too large");
-        }
-        if n >= (1 << 56) {
-            panic!("n is too large");
-        }
         NodePos((level << 56) | n)
     }
     pub fn level(&self) -> u64 {
@@ -90,7 +86,7 @@ pub struct UpperTree {
     // this variable can be recovered from saved edge nodes and activeTwigs
     pub nodes: Vec<Vec<HashMap<NodePos, [u8; 32]>>>, //MaxUpperLevel*NodeShardCount maps
     // this variable can be recovered from entry file
-    pub active_twig_shards: Vec<HashMap<u64, Box<twig::Twig>>> , //TwigShardCount maps
+    pub active_twig_shards: Vec<HashMap<u64, Box<twig::Twig>>>, //TwigShardCount maps
 }
 
 impl UpperTree {
@@ -203,7 +199,10 @@ impl UpperTree {
             if let Some(v) = self.get_node(pos) {
                 new_edge_nodes.push(EdgeNode { pos, value: *v });
             } else {
-                panic!("What? can not find shard_id={} max_level={} level={} end={} cur_end={}", self.my_shard_id, max_level, level, end, cur_end);
+                panic!(
+                    "What? can not find shard_id={} max_level={} level={} end={} cur_end={}",
+                    self.my_shard_id, max_level, level, end, cur_end
+                );
             }
             cur_end >>= 1;
         }
@@ -826,6 +825,83 @@ impl Tree {
         path.right_of_twig = proof::get_right_path(twig, active_bits, sn);
 
         path
+    }
+
+    pub fn get_hashes_by_pos_list(&self, pos_list: &Vec<(u8, u64)>) -> Vec<[u8; 32]> {
+        let mut cache: HashMap<i64, [u8; 32]> = HashMap::with_capacity(20);
+        let mut hashes = Vec::with_capacity(pos_list.len());
+        for (level, nth) in pos_list {
+            let hash = self.get_hash_by_node(*level, *nth, &mut cache);
+            hashes.push(hash);
+        }
+        hashes
+    }
+
+    fn get_hash_by_node(
+        &self,
+        level: u8,
+        nth: u64,
+        cache: &mut HashMap<i64, [u8; 32]>,
+    ) -> [u8; 32] {
+        let mut twig_id: u64 = 0;
+        let mut level_stride: u64 = 0;
+        if level <= 12 {
+            level_stride = 4096 >> level;
+            twig_id = nth / level_stride;
+        }
+
+        // dose not include the level 11
+        // left tree of twig
+        if level <= 10 && (nth % level_stride) < level_stride / 2 {
+            let is_youngest_twig_id = twig_id == self.youngest_twig_id;
+            let self_id: u64 = nth % level_stride;
+            let idx = level_stride / 2 + self_id;
+            if is_youngest_twig_id {
+                return self.mtree_for_youngest_twig[idx as usize];
+            } else {
+                let mut hash = [0u8; 32];
+                self.twig_file_wr
+                    .twig_file
+                    .get_hash_node(twig_id, idx as i64, cache, &mut hash);
+                return hash;
+            }
+        }
+
+        // right tree of twig
+        if level >= 8 && level <= 10 {
+            let (s, k) = get_shard_idx_and_key(twig_id);
+            let active_bits = self.active_bit_shards[s]
+                .get(&k)
+                .unwrap_or(&twig::NULL_ACTIVE_BITS);
+            let self_id: u64 = (nth % level_stride) - level_stride / 2;
+            if level == 8 {
+                let hash = active_bits.get_bits(self_id as usize, 32);
+                return hash.try_into().unwrap();
+            }
+            let twig = self.upper_tree.active_twig_shards[s]
+                .get(&k)
+                .unwrap_or(&twig::NULL_TWIG);
+            if level == 9 {
+                return twig.active_bits_mtl1[self_id as usize];
+            }
+            if level == 10 {
+                return twig.active_bits_mtl2[self_id as usize];
+            }
+        }
+
+        // upper tree
+        if level == 12 {
+            return self
+                .upper_tree
+                .get_twig_root(twig_id)
+                .unwrap_or(&twig::NULL_TWIG.twig_root)
+                .clone();
+        }
+        return self
+            .upper_tree
+            .get_node(NodePos::pos(level as u64, nth))
+            .unwrap()
+            .clone();
     }
 
     pub fn get_proof_map_by_sns(
