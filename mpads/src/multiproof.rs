@@ -266,9 +266,14 @@ pub fn verify_entries(
         if offset >= witness.len() {
             return false;
         }
-        let w = &witness[offset];
+        if activebit_offset >= witness.len() {
+            return false;
+        }
+
         let sn = entry.serial_number();
         let leaf = sn_to_leaf(sn);
+
+        let w = &witness[offset];
         if w.level != 0 || w.nth != leaf {
             return false; // NodePos of witness is wrong
         }
@@ -278,9 +283,6 @@ pub fn verify_entries(
             return false; // hash mismatch
         }
 
-        if activebit_offset >= witness.len() {
-            return false;
-        }
         let w = &witness[activebit_offset];
         let activebit_leaf = leaf_to_nth_for_activebits(leaf);
         if w.level != 8 || w.nth != activebit_leaf {
