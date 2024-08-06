@@ -55,7 +55,7 @@ mod tests {
         let block_ctx = create_transfer(from, to_address, init_balance, coinbase, true);
 
         block_ctx.warmup(0);
-        block_ctx.execute(0);
+        block_ctx.execute_task(0);
         block_ctx.end_block();
 
         // println!("block_ctx.results = {:?}", block_ctx.results);
@@ -79,7 +79,7 @@ mod tests {
         let block_ctx = create_transfer(from, to_address, init_balance, coinbase, true);
 
         block_ctx.warmup(0);
-        block_ctx.execute(0);
+        block_ctx.execute_task(0);
         block_ctx.end_block();
 
         // println!("block_ctx.results = {:?}", block_ctx.results);
@@ -103,7 +103,7 @@ mod tests {
         let block_ctx = create_transfer(from, to_address, init_balance, coinbase, true);
 
         block_ctx.warmup(0);
-        block_ctx.execute(0);
+        block_ctx.execute_task(0);
         block_ctx.end_block();
 
         // println!("block_ctx.results = {:?}", block_ctx.results);
@@ -127,7 +127,7 @@ mod tests {
         let block_ctx = create_transfer(from, to_address, init_balance, coinbase, false);
 
         block_ctx.warmup(0);
-        block_ctx.execute(0);
+        block_ctx.execute_task(0);
         block_ctx.end_block();
 
         // println!("block_ctx.results = {:?}", block_ctx.results);
@@ -156,7 +156,7 @@ mod tests {
         }
 
         block_ctx.warmup(0);
-        block_ctx.execute(0);
+        block_ctx.execute_task(0);
         block_ctx.end_block();
 
         // println!("block_ctx.results = {:?}", block_ctx.results);
@@ -185,7 +185,7 @@ mod tests {
             true,
         );
         block_ctx.warmup(0);
-        block_ctx.execute(0);
+        block_ctx.execute_task(0);
         block_ctx.end_block();
 
         // println!("block_ctx.results = {:?}", block_ctx.results);
@@ -223,7 +223,7 @@ mod tests {
             false,
         );
         block_ctx.warmup(0);
-        block_ctx.execute(0);
+        block_ctx.execute_task(0);
         block_ctx.end_block();
 
         let r = block_ctx.read_result(0);
@@ -244,7 +244,7 @@ mod tests {
 
         let block_ctx = create_contract_call(eoa_addr, ca_addr, U256::ZERO, vec![], coinbase, true);
         block_ctx.warmup(0);
-        block_ctx.execute(0);
+        block_ctx.execute_task(0);
         block_ctx.end_block();
 
         // println!("block_ctx.results = {:?}", block_ctx.results);
@@ -277,7 +277,7 @@ mod tests {
             true,
         );
         block_ctx.warmup(0);
-        block_ctx.execute(0);
+        block_ctx.execute_task(0);
         block_ctx.end_block();
         // println!("block_ctx.results = {:?}", block_ctx.results);
 

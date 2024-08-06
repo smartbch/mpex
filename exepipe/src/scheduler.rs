@@ -296,7 +296,7 @@ impl Scheduler {
                 let executed_sender = self.executed_sender.clone();
                 self.tpool.execute(move || {
                     ctx.warmup(task_idx);
-                    ctx.execute(task_idx);
+                    ctx.execute_task(task_idx);
                     executed_sender.send(task_idx as i32).unwrap();
                 });
             } else {

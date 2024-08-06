@@ -171,13 +171,13 @@ impl<T: ADS> BlockContext<T> {
         self.gas_fee_collect.add(&gas_fee_delta);
     }
 
-    pub fn execute(&self, idx: usize) {
+    pub fn execute_task(&self, idx: usize) {
         let mut task_opt = self.tasks_manager.task_for_write(idx);
         let task = task_opt.as_mut().unwrap();
         let mut change_sets = Vec::with_capacity(task.tx_list.len());
         let mut task_result: Vec<Result<ResultAndState>> = Vec::new();
         for index in 0..task.tx_list.len() {
-            let (tx_result, mut change_set) = self.handle_transaction(&task, index);
+            let (tx_result, mut change_set) = self.execute_tx(&task, index);
             task_result.push(tx_result);
             change_set.sort();
             self.curr_state.apply_change(&change_set);
@@ -193,11 +193,7 @@ impl<T: ADS> BlockContext<T> {
         *result_opt = Option::Some(task_result);
     }
 
-    fn handle_transaction(
-        &self,
-        task: &ExeTask,
-        index: usize,
-    ) -> (Result<ResultAndState>, ChangeSet) {
+    fn execute_tx(&self, task: &ExeTask, index: usize) -> (Result<ResultAndState>, ChangeSet) {
         let tx = &task.tx_list[index];
         let env = Box::new(Env {
             cfg: CfgEnv::default(),
