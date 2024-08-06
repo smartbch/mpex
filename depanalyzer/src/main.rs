@@ -3,6 +3,7 @@ use exepipe::exetask::AccessSet;
 use exepipe::scheduler::{PBElement, ParaBloom, MAX_TASKS_LEN_IN_BUNDLE, SET_MAX_SIZE};
 use mpads::utils::hasher;
 use mpads::twig::Twig;
+use mpads::indexer::BTreeIndexer;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -39,10 +40,12 @@ fn main() {
     } else {
         run_serial_issuer();
     }
+
     //run_aggregate_tx();
  
     //allocate_twigs(1024*1024);
     //allocate_twig_boxes(1024*1024);
+    //allocate_indexer_entries(1<<26);
 }
 
 
@@ -615,3 +618,13 @@ fn allocate_twig_boxes(count: u64) {
     }
 }
 
+fn allocate_indexer_entries(count: u64) {
+    let mut buf = [0u8; 8];
+    let mut indexer = BTreeIndexer::new(65536);
+    for i in 0..count {
+        BigEndian::write_u64(&mut buf[..], i);
+        let hash = hasher::hash(&buf[..]);
+        let k = BigEndian::read_u64(&hash[..8]);
+        indexer.add_kv(k, (i*8) as i64);
+    }
+}
