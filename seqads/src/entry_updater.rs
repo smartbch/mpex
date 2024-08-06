@@ -184,7 +184,7 @@ impl EntryUpdater {
             serial_number: self.sn_end,
         };
         let dsn_list: [u64; 1] = [old_entry.serial_number()];
-        let new_pos = self.append(&new_entry, &dsn_list[..]);
+        let new_pos = self.update_buffer.append(&new_entry, &dsn_list[..]);
         self.sn_end += 1;
         self.indexer.change_kv(k64, old_pos, new_pos);
     }
@@ -244,7 +244,7 @@ impl EntryUpdater {
         };
         let deactived_sn_list: [u64; 2] = [del_entry_sn, prev_entry.serial_number()];
         let new_pos = self
-            .append(&prev_changed, &deactived_sn_list[..]);
+            .update_buffer.append(&prev_changed, &deactived_sn_list[..]);
 
         self.sn_end += 1;
         self.indexer.change_kv(prev_k64, old_pos, new_pos);
@@ -289,7 +289,7 @@ impl EntryUpdater {
             last_version: -1,
             serial_number: self.sn_end,
         };
-        let create_pos = self.append(&new_entry, &[]);
+        let create_pos = self.update_buffer.append(&new_entry, &[]);
         let hash = hasher::hash(key);
         let prev_changed = Entry {
             key: prev_entry.key(),
@@ -301,15 +301,10 @@ impl EntryUpdater {
         };
         let deactivated_sn_list: [u64; 1] = [prev_entry.serial_number()];
         let new_pos = self
-            .append(&prev_changed, &deactivated_sn_list[..]);
+            .update_buffer.append(&prev_changed, &deactivated_sn_list[..]);
         self.indexer.add_kv(k64, create_pos);
         self.indexer.change_kv(prev_k64, old_pos, new_pos);
         self.sn_end += 2;
-    }
-
-    pub fn append(&self, entry: &Entry, deactived_serial_num_list: &[u64]) -> i64 {
-        //todo:
-        return 0;
     }
 
     pub fn get_all_entry_bz(&self) -> Vec<EntryBz> {

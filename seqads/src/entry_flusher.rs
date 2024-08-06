@@ -6,25 +6,25 @@ use mpads::def::{LEAF_COUNT_IN_TWIG};
 use mpads::entryfile::{EntryFile, EntryFileWriter};
 use mpads::metadb::MetaDB;
 use mpads::tree::{Tree};
-use crate::entry_updater::EntryUpdater;
+use crate::entry_updater::{CodeUpdater, EntryUpdater};
 
 pub struct CodeFlusherShard {
-    //updater: EntryUpdater, //todo: code updater
+    updater: Rc<RefCell<CodeUpdater>>,
     code_file_wr: EntryFileWriter,
 }
 impl CodeFlusherShard {
-    pub fn new(code_file: Arc<EntryFile>, buffer_size: usize) -> Self {
+    pub fn new(code_file: Arc<EntryFile>, buffer_size: usize, updater: Rc<RefCell<CodeUpdater>>) -> Self {
         Self {
-            //updater,
+            updater,
             code_file_wr: EntryFileWriter::new(code_file, buffer_size),
         }
     }
 
     pub fn flush(&mut self) {
-        // for entry_bz in self.updater.get_all_entry_bz() {
-        //     self.code_file_wr.append(&entry_bz);
-        // }
-        // self.code_file_wr.flush();
+        for entry_bz in self.updater.borrow().update_buffer.get_all_entry_bz() {
+            self.code_file_wr.append(&entry_bz);
+        }
+        self.code_file_wr.flush();
     }
 }
 
@@ -85,7 +85,7 @@ impl EntryFlusher {
     }
 
     pub fn flush_block(&mut self, curr_height: i64) {
-
+        //todo:
     }
 
     pub fn flush_tx(&mut self, shard_count: usize) {

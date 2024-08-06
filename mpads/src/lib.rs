@@ -246,7 +246,7 @@ impl AdsCore {
         meta.commit()
     }
 
-    fn check_entry(key_hash: &[u8], key: &[u8], entry_bz: &EntryBz) -> bool {
+    pub fn check_entry(key_hash: &[u8], key: &[u8], entry_bz: &EntryBz) -> bool {
         if key.len() == 0 {
             entry_bz.key_hash() == key_hash
         } else {
