@@ -79,10 +79,10 @@ pub fn get_witness(sn_list: &Vec<u64>, tree: &Tree) -> Witness {
             panic!("not at the left tree of a twig");
         }
         pos_set.insert((0, leaf));
-        _get_post_list(max_level - 1, &mut pos_set, 0, leaf);
+        _get_pos_list(max_level - 1, &mut pos_set, 0, leaf);
         let activebits_leaf_nth = leaf_to_nth_for_activebits(leaf);
         pos_set.insert((8, activebits_leaf_nth));
-        _get_post_list(max_level - 1, &mut pos_set, 8, activebits_leaf_nth);
+        _get_pos_list(max_level - 1, &mut pos_set, 8, activebits_leaf_nth);
     }
     //  clean up the nodes that are not necessary
     for leaf in leaves {
@@ -96,7 +96,7 @@ pub fn get_witness(sn_list: &Vec<u64>, tree: &Tree) -> Witness {
         }
     }
 
-    let pos_list = _sort_post_list(&pos_set);
+    let pos_list = _sort_pos_list(&pos_set);
     let hash_list = tree.get_hashes_by_pos_list(&pos_list);
     let mut witness = Vec::<MultiProofNode>::with_capacity(pos_list.len());
     for (i, pos) in pos_list.iter().enumerate() {
@@ -132,7 +132,7 @@ pub fn encode_witness(witness: &Witness, entries: &Vec<EntryBz>) -> Vec<u8> {
 }
 
 // add siblings and ancestors from the leaf to the root
-fn _get_post_list(
+fn _get_pos_list(
     max_level: u8,
     included_nodes: &mut HashSet<(u8, u64)>,
     leaf_level: u8,
@@ -147,7 +147,7 @@ fn _get_post_list(
     }
 }
 
-fn _sort_post_list(nodes_set: &HashSet<(u8, u64)>) -> Vec<(u8, u64)> {
+fn _sort_pos_list(nodes_set: &HashSet<(u8, u64)>) -> Vec<(u8, u64)> {
     let leaf_to_nodes_map: HashMap<u64, (u8, u64)> =
         nodes_set.iter().fold(HashMap::new(), |mut acc, &pos| {
             let leaf = pos.1 as u64 * u64::pow(2, pos.0 as u32);
@@ -486,7 +486,7 @@ mod tests {
         let mut witness_bz = vec![];
         let mut input_entry_bz_list = vec![];
         {
-            // produce wintness
+            // produce witness
             let (mut tree, mut pos_list, mut serial_number, mut entry_bzs) =
                 create_tree(dir_name, true);
             let witness = get_witness(&sns, &tree);
