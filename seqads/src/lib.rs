@@ -2,7 +2,7 @@ mod entry_loader;
 mod entry_updater;
 mod entry_flusher;
 
-use std::cell::{Ref, RefCell};
+use std::cell::{RefCell};
 use std::fs;
 use std::rc::Rc;
 use std::sync::{Arc, RwLock};
@@ -11,7 +11,7 @@ use mpads::{ADS, AdsCore};
 use mpads::bptaskhub::{Task};
 use mpads::changeset::ChangeSet;
 use mpads::def::{CODE_PATH, DEFAULT_ENTRY_SIZE, SHARD_COUNT};
-use mpads::entry::EntryBz;
+use mpads::entry::{EntryBz};
 use mpads::entrycache::EntryCache;
 use mpads::entryfile::{EntryFile};
 use mpads::indexer::{BTreeIndexer, CodeIndexer};
@@ -105,8 +105,11 @@ impl SeqAds {
 
             let entry_file = tree.entry_file_wr.entry_file.clone();
             entry_files.push(entry_file.clone());
-            let sn_end = meta.clone().read().unwrap().get_next_serial_num(shard_id);
-            let updater = Rc::new(RefCell::new(EntryUpdater::new(shard_id, entry_file.clone(), indexer.clone(), -1, sn_end)));
+            let sn_end =  meta.clone().read().unwrap().get_next_serial_num(shard_id);
+            let compact_start =  meta.clone().read().unwrap().get_oldest_active_file_pos(shard_id);
+            let oldest_active_sn =  meta.clone().read().unwrap().get_oldest_active_sn(shard_id);
+            let updater = Rc::new(RefCell::new(
+                EntryUpdater::new(shard_id, entry_file.clone(), indexer.clone(), -1, sn_end, compact_start, 10000)));
             shards.push(Box::new(FlusherShard::new(
                 tree,
                 oldest_active_sn,
@@ -115,7 +118,6 @@ impl SeqAds {
             )));
             entry_updaters.push(updater);
         }
-
 
         let flusher = RefCell::new(EntryFlusher::new(
             shards,
@@ -159,7 +161,7 @@ impl SeqAds {
     }
 }
 
-impl<T: Task + 'static> ADS for  SeqAdsWrap<T> {
+impl<T: Task + 'static> ADS for SeqAdsWrap<T> {
     fn read_entry(&self, key_hash: &[u8], key: &[u8], buf: &mut [u8]) -> (usize, bool) {
         let k64 = BigEndian::read_u64(&key_hash[0..8]);
         let shard_id = (key_hash[0] as usize) >> 4;

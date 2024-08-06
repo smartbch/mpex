@@ -662,6 +662,7 @@ dependencies = [
  "mpads",
  "num-traits",
  "revm",
+ "seqads",
  "serial_test",
  "threadpool",
 ]

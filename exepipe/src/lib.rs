@@ -9,6 +9,7 @@ pub mod scheduler;
 pub mod statecache;
 pub mod test_helper;
 pub mod utils;
+mod exe_seq;
 
 use crate::context::BlockContext;
 use crate::coordinator::Coordinator;

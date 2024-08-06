@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 threadpool = "1.8.1"
 mpads = { path = "../mpads" }
+seqads = { path = "../seqads" }
 revm = { version = "8", features = ["serde"] }
 byteorder = "1.5.0"
 bincode = "1.3.3"

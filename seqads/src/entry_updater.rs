@@ -114,16 +114,20 @@ pub struct EntryUpdater {
 
     update_buffer: UpdateBuffer,
     sn_end: u64,
+
+    compact_start:i64,
+    compact_thres: usize,
 }
 
 impl EntryUpdater {
-
     pub fn new(
         shard_id: usize,
         entry_file: Arc<EntryFile>,
         indexer: Rc<BTreeIndexer>,
         curr_version: i64,
         sn_end: u64,
+        compact_start:i64,
+        compact_thres:usize
     ) -> Self {
         Self {
             shard_id,
@@ -133,7 +137,9 @@ impl EntryUpdater {
             read_entry_buf: Vec::with_capacity(DEFAULT_ENTRY_SIZE),
             curr_version,
             sn_end,
+            compact_start,
             update_buffer:UpdateBuffer::new(),
+            compact_thres,
         }
     }
     pub fn run_task(&mut self, change_sets: &Vec<ChangeSet>) {
@@ -185,8 +191,8 @@ impl EntryUpdater {
         };
         let dsn_list: [u64; 1] = [old_entry.serial_number()];
         let new_pos = self.update_buffer.append(&new_entry, &dsn_list[..]);
-        self.sn_end += 1;
         self.indexer.change_kv(k64, old_pos, new_pos);
+        self.try_compact();
     }
 
     fn delete_kv(&mut self, key_hash: &[u8; 32], key: &[u8], r: Option<&Box<OpRecord>>) {
@@ -304,7 +310,34 @@ impl EntryUpdater {
             .update_buffer.append(&prev_changed, &deactivated_sn_list[..]);
         self.indexer.add_kv(k64, create_pos);
         self.indexer.change_kv(prev_k64, old_pos, new_pos);
-        self.sn_end += 2;
+        self.try_compact();
+        self.try_compact();
+    }
+
+    fn try_compact(
+        &mut self,
+    ) {
+        if self.indexer.len(self.shard_id) < self.compact_thres {
+            return
+        }
+        let mut bz: Vec<u8> = vec![0; DEFAULT_ENTRY_SIZE];
+        let size = self.entry_file.read_entry(self.compact_start, &mut bz[..]);
+        if bz.len() < size {
+            bz.resize(size, 0);
+            self.entry_file.read_entry(self.compact_start, &mut bz[..]);
+        }
+        self.compact_start += bz.len() as i64;
+        let old_entry = EntryBz { bz: &bz[..size] };
+        let new_entry = Entry {
+            key: old_entry.key(),
+            value: old_entry.value(),
+            next_key_hash: old_entry.next_key_hash(),
+            version: old_entry.version(),
+            last_version: old_entry.last_version(),
+            serial_number: self.sn_end,
+        };
+        self.sn_end += 1;
+        self.update_buffer.append(&new_entry, &vec![old_entry.serial_number()]);
     }
 
     pub fn get_all_entry_bz(&self) -> Vec<EntryBz> {
