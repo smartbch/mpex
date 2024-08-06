@@ -1,7 +1,7 @@
 use crate::context;
 use crate::exetask::{AccessSet, ExeTask};
 use mpads::def::IN_BLOCK_IDX_BITS;
-use mpads::SharedAdsWrap;
+use mpads::{ADS, SharedAdsWrap};
 use num_traits::Num;
 use std::collections::VecDeque;
 use std::sync::mpsc;
@@ -163,10 +163,10 @@ pub struct EarlyExeInfo {
     pub min_all_done_index: i32, // task with my_idx does not collide with all task before min_all_done_index.
 }
 
-pub struct Scheduler {
+pub struct Scheduler<T> where T: ADS {
     // following three fields need to be updated every block
     height: i64,
-    blk_ctx: Arc<BlockContext>,
+    blk_ctx: Arc<context::BlockContext<T>>,
 
     pb: ParaBloom64,
     bundles: Vec<VecDeque<ExeTask>>,
@@ -177,13 +177,13 @@ pub struct Scheduler {
     executed_sender: mpsc::SyncSender<i32>, // send already executed task in scheduled period to coordinator.run()
 }
 
-impl Scheduler {
+impl <T:ADS> Scheduler<T> {
     pub fn new(
         tpool: Arc<ThreadPool>,
-        blk_ctx: Arc<BlockContext>,
+        blk_ctx: Arc<context::BlockContext<T>>,
         scheduled_chan: mpsc::SyncSender<EarlyExeInfo>,
         executed_sender: mpsc::SyncSender<i32>,
-    ) -> Scheduler {
+    ) -> Scheduler<T> {
         let mut bundles = Vec::with_capacity(BUNDLE_COUNT);
         for _ in 0..BUNDLE_COUNT {
             bundles.push(VecDeque::with_capacity(MAX_TASKS_LEN_IN_BUNDLE));
@@ -201,7 +201,7 @@ impl Scheduler {
         }
     }
 
-    pub fn start_new_block(&mut self, height: i64, blk_ctx: Arc<BlockContext>) {
+    pub fn start_new_block(&mut self, height: i64, blk_ctx: Arc<context::BlockContext<T>>) {
         self.height = height;
         self.blk_ctx = blk_ctx;
         for i in 0..BUNDLE_COUNT {
@@ -311,11 +311,11 @@ impl Scheduler {
     }
 }
 
-fn prepare_task_and_send_eei(
+fn prepare_task_and_send_eei<T:ADS>(
     my_idx: usize,
     task_out_start: usize,
     scheduled_chan: mpsc::SyncSender<EarlyExeInfo>,
-    blk_ctx: Arc<BlockContext>,
+    blk_ctx: Arc<context::BlockContext<T>>,
 ) {
     let mut stop_detect = 0;
     if task_out_start > EARLY_EXE_WINDOW_SIZE {

@@ -161,66 +161,66 @@ impl SeqAds {
     }
 }
 
-impl<T: Task + 'static> ADS for SeqAdsWrap<T> {
-    fn read_entry(&self, key_hash: &[u8], key: &[u8], buf: &mut [u8]) -> (usize, bool) {
-        let k64 = BigEndian::read_u64(&key_hash[0..8]);
-        let shard_id = (key_hash[0] as usize) >> 4;
-        let mut size = 0;
-        let mut found_it = false;
-        self.ads.indexer.for_each_value(k64, |file_pos| -> bool {
-            let mut buf_too_small = false;
-            self.ads.entry_cache.lookup(shard_id, file_pos, |entry_bz| {
-                found_it = AdsCore::check_entry(key_hash, key, &entry_bz);
-                if found_it {
-                    size = entry_bz.len();
-                    if buf.len() < size {
-                        buf_too_small = true;
-                    } else {
-                        buf[..size].copy_from_slice(entry_bz.bz);
-                    }
-                }
-            });
-            if found_it || buf_too_small {
-                return true; //stop loop if key matches or buf is too small
-            }
-            size = self.ads.entry_files[shard_id].read_entry(file_pos, buf);
-            if buf.len() < size {
-                return true; //stop loop if buf is too small
-            }
-            let entry_bz = EntryBz { bz: &buf[..size] };
-            found_it = AdsCore::check_entry(key_hash, key, &entry_bz);
-            if found_it {
-                self.ads.entry_cache.insert(shard_id, file_pos, &entry_bz);
-            }
-            found_it // stop loop if key matches
-        });
-        (size, found_it)
-    }
-
-    fn read_code(&self, code_hash: &[u8], buf: &mut Vec<u8>) -> usize {
-        if buf.len() < DEFAULT_ENTRY_SIZE {
-            panic!("buf.len() less than DEFAULT_ENTRY_SIZE");
-        }
-        let mut size = 0;
-        self.ads.code_indexer
-            .for_each_value(code_hash, |file_pos| -> bool {
-                size = self.ads.code_file.read_entry(file_pos, &mut buf[..]);
-                if buf.len() < size {
-                    buf.resize(size, 0);
-                    self.ads.code_file.read_entry(file_pos, &mut buf[..]);
-                }
-                let entry_bz = EntryBz { bz: &buf[..size] };
-                let match_code_hash = entry_bz.next_key_hash() == code_hash;
-                if !match_code_hash {
-                    size = 0;
-                }
-                match_code_hash // stop loop if code_hash matches
-            });
-        size
-    }
-
-    fn add_task(&self, task_id: i64) {
-        let change_sets = self.tasks_manager.get_tasks_change_sets(task_id as usize);
-        self.ads.commit_tx(task_id, &change_sets);
-    }
-}
+// impl<T: Task + 'static> ADS for SeqAdsWrap<T> {
+//     fn read_entry(&self, key_hash: &[u8], key: &[u8], buf: &mut [u8]) -> (usize, bool) {
+//         let k64 = BigEndian::read_u64(&key_hash[0..8]);
+//         let shard_id = (key_hash[0] as usize) >> 4;
+//         let mut size = 0;
+//         let mut found_it = false;
+//         self.ads.indexer.for_each_value(k64, |file_pos| -> bool {
+//             let mut buf_too_small = false;
+//             self.ads.entry_cache.lookup(shard_id, file_pos, |entry_bz| {
+//                 found_it = AdsCore::check_entry(key_hash, key, &entry_bz);
+//                 if found_it {
+//                     size = entry_bz.len();
+//                     if buf.len() < size {
+//                         buf_too_small = true;
+//                     } else {
+//                         buf[..size].copy_from_slice(entry_bz.bz);
+//                     }
+//                 }
+//             });
+//             if found_it || buf_too_small {
+//                 return true; //stop loop if key matches or buf is too small
+//             }
+//             size = self.ads.entry_files[shard_id].read_entry(file_pos, buf);
+//             if buf.len() < size {
+//                 return true; //stop loop if buf is too small
+//             }
+//             let entry_bz = EntryBz { bz: &buf[..size] };
+//             found_it = AdsCore::check_entry(key_hash, key, &entry_bz);
+//             if found_it {
+//                 self.ads.entry_cache.insert(shard_id, file_pos, &entry_bz);
+//             }
+//             found_it // stop loop if key matches
+//         });
+//         (size, found_it)
+//     }
+//
+//     fn read_code(&self, code_hash: &[u8], buf: &mut Vec<u8>) -> usize {
+//         if buf.len() < DEFAULT_ENTRY_SIZE {
+//             panic!("buf.len() less than DEFAULT_ENTRY_SIZE");
+//         }
+//         let mut size = 0;
+//         self.ads.code_indexer
+//             .for_each_value(code_hash, |file_pos| -> bool {
+//                 size = self.ads.code_file.read_entry(file_pos, &mut buf[..]);
+//                 if buf.len() < size {
+//                     buf.resize(size, 0);
+//                     self.ads.code_file.read_entry(file_pos, &mut buf[..]);
+//                 }
+//                 let entry_bz = EntryBz { bz: &buf[..size] };
+//                 let match_code_hash = entry_bz.next_key_hash() == code_hash;
+//                 if !match_code_hash {
+//                     size = 0;
+//                 }
+//                 match_code_hash // stop loop if code_hash matches
+//             });
+//         size
+//     }
+//
+//     fn add_task(&self, task_id: i64) {
+//         let change_sets = self.tasks_manager.get_tasks_change_sets(task_id as usize);
+//         self.ads.commit_tx(task_id, &change_sets);
+//     }
+// }

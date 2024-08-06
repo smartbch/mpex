@@ -16,7 +16,7 @@ use crate::coordinator::Coordinator;
 use crate::exetask::ExeTask;
 use crate::scheduler::Scheduler;
 use mpads::tasksmanager::TasksManager;
-use mpads::AdsWrap;
+use mpads::{ADS, AdsWrap, SharedAdsWrap};
 use revm::precompile::primitives::BlockEnv;
 use std::sync::mpsc;
 use std::sync::{Arc, RwLock};
@@ -24,7 +24,7 @@ use std::thread;
 use threadpool::ThreadPool;
 
 pub struct ExePipe {
-    scheduler: Scheduler,
+    scheduler: Scheduler<SharedAdsWrap>,
     coordinator: Option<Coordinator>,
     ads: AdsWrap<ExeTask>,
 }

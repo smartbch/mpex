@@ -468,7 +468,7 @@ impl<T: Task + 'static> AdsWrap<T> {
     }
 }
 
-pub trait ADS {
+pub trait ADS: Send + Sync + 'static {
     fn read_entry(&self, key_hash: &[u8], key: &[u8], buf: &mut [u8]) -> (usize, bool);
     fn read_code(&self, code_hash: &[u8], buf: &mut Vec<u8>) -> usize;
     fn add_task(&self, task_id: i64);
