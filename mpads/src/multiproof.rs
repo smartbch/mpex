@@ -96,7 +96,7 @@ pub fn get_witness(sn_list: &Vec<u64>, tree: &Tree) -> Witness {
         }
     }
 
-    let pos_list = _sort_post_list(&pos_set, max_level);
+    let pos_list = _sort_post_list(&pos_set);
     let hash_list = tree.get_hashes_by_pos_list(&pos_list);
     let mut witness = Vec::<MultiProofNode>::with_capacity(pos_list.len());
     for (i, pos) in pos_list.iter().enumerate() {
@@ -147,63 +147,17 @@ fn _get_post_list(
     }
 }
 
-fn _sort_post_list(nodes_set: &HashSet<(u8, u64)>, max_level: u8) -> Vec<(u8, u64)> {
-    let mut target_node_pos = nodes_set
-        .iter()
-        .filter(|&&(u, _)| u == 0)
-        .min_by_key(|&&(_, v)| v)
-        .copied()
-        .unwrap();
-    let mut _nodes_set = nodes_set.clone();
-    let mut stack = Vec::<(u8, u64)>::new();
-    let mut pos_list = Vec::<(u8, u64)>::with_capacity(nodes_set.len());
-    loop {
-        let mut last_node_pos = (u8::MAX, u64::MAX);
-        if let Some(node) = stack.last() {
-            last_node_pos = node.clone();
-        }
+fn _sort_post_list(nodes_set: &HashSet<(u8, u64)>) -> Vec<(u8, u64)> {
+    let leaf_to_nodes_map: HashMap<u64, (u8, u64)> =
+        nodes_set.iter().fold(HashMap::new(), |mut acc, &pos| {
+            let leaf = pos.1 as u64 * u64::pow(2, pos.0 as u32);
+            acc.insert(leaf, pos);
+            acc
+        });
 
-        // Has got to the root
-        if last_node_pos.0 == max_level {
-            break;
-        }
-
-        // can combine
-        if let Some(&(level, nth)) = stack.get(stack.len().wrapping_sub(2)) {
-            if (level, nth ^ 1) == last_node_pos {
-                // println!("combine!!!!!!!!");
-                let mut right = stack.pop().unwrap();
-                let mut left = stack.pop().unwrap();
-                if left.1 & 1 != 0 {
-                    (left, right) = (right, left);
-                }
-                let parent = (right.0 + 1, right.1 / 2);
-                // println!("----combine: {:?} + {:?} = {:?}", left, right, parent);
-                target_node_pos = parent.clone();
-                stack.push(parent);
-                continue;
-            }
-        }
-
-        // need push sibling to stack
-        if _nodes_set.contains(&target_node_pos) || last_node_pos == target_node_pos {
-            if _nodes_set.contains(&target_node_pos) {
-                _nodes_set.remove(&target_node_pos);
-                pos_list.push((target_node_pos.0, target_node_pos.1));
-                stack.push(target_node_pos);
-            }
-            target_node_pos = (target_node_pos.0, target_node_pos.1 ^ 1);
-            continue;
-        }
-
-        // calc target from children
-        target_node_pos = (target_node_pos.0 - 1, target_node_pos.1 * 2);
-        continue;
-    }
-    if !_nodes_set.is_empty() {
-        panic!("included_nodes_set should empty");
-    }
-    pos_list
+    let mut vec: Vec<_> = leaf_to_nodes_map.into_iter().collect();
+    vec.sort_by_key(|&(key, _)| key);
+    vec.into_iter().map(|(_, value)| value).collect()
 }
 
 // For each leaf, where to find its own witness and its activebit's witness?
@@ -256,18 +210,25 @@ pub fn verify_witness(witness: &Witness, old_root: &[u8; 32], new_root: &[u8; 32
         // if we have two children at the stack top, we can
         // pop them out to calculate the parent
         if two_children_at_top {
-            let mut a = stack.pop().unwrap();
-            let mut b = stack.pop().unwrap();
-            if a.nth & 1 != 0 {
-                (a, b) = (b, a);
-            }
-            let mut parent = MultiProofNode::new(a.level + 1, a.nth / 2);
+            let right = stack.pop().unwrap();
+            let left = stack.pop().unwrap();
+            let mut parent = MultiProofNode::new(left.level + 1, left.nth / 2);
             println!(
                 "----combine_level_{}: {:?} + {:?} = {}-{}",
-                a.level, a.nth, b.nth, parent.level, parent.nth
+                left.level, left.nth, right.nth, parent.level, parent.nth
             );
-            hasher::node_hash_inplace(a.level, &mut parent.old_value, a.old_value, b.old_value);
-            hasher::node_hash_inplace(a.level, &mut parent.new_value, a.new_value, b.new_value);
+            hasher::node_hash_inplace(
+                left.level,
+                &mut parent.old_value,
+                left.old_value,
+                right.old_value,
+            );
+            hasher::node_hash_inplace(
+                left.level,
+                &mut parent.new_value,
+                left.new_value,
+                right.new_value,
+            );
             stack.push(parent);
         } else if idx >= witness.len() {
             break;
