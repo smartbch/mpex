@@ -254,14 +254,14 @@ pub fn verify_witness(witness: &Witness, old_root: &[u8; 32], new_root: &[u8; 32
 pub fn verify_entries(
     start_sn_for_new_entry: u64,
     entries: &Vec<EntryBz>,
-    witness_offsets: &Vec<(usize, usize)>,
+    leaf_offsets: &Vec<(usize, usize)>,
     witness: &Witness,
 ) -> bool {
-    if entries.len() != witness_offsets.len() {
+    if entries.len() != leaf_offsets.len() {
         return false;
     }
     for (i, entry) in entries.iter().enumerate() {
-        let (offset, activebit_offset) = witness_offsets[i];
+        let (offset, activebit_offset) = leaf_offsets[i];
 
         if offset >= witness.len() {
             return false;
