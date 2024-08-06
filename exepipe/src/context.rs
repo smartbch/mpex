@@ -229,43 +229,39 @@ impl<T: ADS> BlockContext<T> {
             evm.transact()
         };
 
-        let mut tx_result: Result<ResultAndState>;
-        match evm_result {
-            Ok(res_and_state) => {
-                tx_result = Ok(res_and_state.clone());
-
-                let gas_used = res_and_state.result.gas_used();
-                let mut change_set = ChangeSet::new();
-                // we must check not writing the readonly account and slot.
-                match get_change_set_and_check_access_rw(
-                    &mut change_set,
-                    &res_and_state.state,
-                    &mut orig_acc_map,
-                    self.curr_state.as_ref(),
-                    &task.access_set, //to check out-of-write-set errors
-                    true,
-                ) {
-                    Ok(_) => {
-                        // if no error, update world state
-                        self.collect_gas_fee(coinbase_gas_price * U256::from(gas_used));
-                        return (tx_result, change_set);
-                    }
-                    Err(err) => {
-                        // there has rw error
-                        tx_result = Err(anyhow!("Commit state change error: {:?}", err));
-                    }
-                }
-            }
-            Err(err) => {
-                tx_result = Err(anyhow!("EVM transact error: {:?}", err));
-            }
+        if let Err(err) = evm_result {
+            let tx_result = Err(anyhow!("EVM transact error: {:?}", err));
+            let change_set = self.handle_tx_execute_mpex_err(&tx, coinbase_gas_price);
+            return (tx_result, change_set);
         }
 
-        // at errors, cannot apply state change, but we need deduct all gas from caller.
-        let change_set = self.handle_tx_execute_mpex_err(&tx, coinbase_gas_price);
+        let res_and_state = evm_result.unwrap();
+        let gas_used = res_and_state.result.gas_used();
+        let mut change_set = ChangeSet::new();
+        // we must check not writing the readonly account and slot.
+        let get_cs_result = get_change_set_and_check_access_rw(
+            &mut change_set,
+            &res_and_state.state,
+            &mut orig_acc_map,
+            self.curr_state.as_ref(),
+            &task.access_set, //to check out-of-write-set errors
+            true,
+        );
+
+        if let Err(err) = get_cs_result {
+            // there has rw error
+            let tx_result = Err(anyhow!("Commit state change error: {:?}", err));
+            let change_set = self.handle_tx_execute_mpex_err(&tx, coinbase_gas_price);
+            return (tx_result, change_set);
+        }
+
+        // if no error, update world state
+        self.collect_gas_fee(coinbase_gas_price * U256::from(gas_used));
+        let tx_result = Ok(res_and_state);
         return (tx_result, change_set);
     }
 
+    // at errors, cannot apply state change, but we need deduct all gas from caller.
     // handle_tx_execute_mpex_err will be call at errors because:
     // 1. warmup generates errors
     // 2. revm.transact gets errors from 'Database' or handlers and returns them
