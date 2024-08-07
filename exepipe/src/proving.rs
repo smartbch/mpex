@@ -4,16 +4,19 @@ use anyhow::{anyhow, Result};
 use bincode;
 use mpads::changeset::ChangeSet;
 use mpads::entry::{EntryBz, Hash32};
-use mpads::multiproof::Witness;
+use mpads::multiproof::{verify_entries, verify_witness, Witness};
 use mpads::utils::hasher;
 use revm::db::Database;
 use revm::precompile::primitives::{AccountInfo, Bytecode, B256, U256};
 use revm::precompile::Address;
-use revm::primitives::FixedBytes;
+use revm::primitives::{BlockEnv, CfgEnv, EVMError, Env, FixedBytes, ResultAndState};
+use revm::Evm;
 
+use crate::context::create_mpex_handler;
 use crate::exetask::{ExeTask, ACC_INFO_LEN};
 use crate::utils::{decode_account_info, is_empty_code_hash, join_address_index};
 
+#[derive(Clone)]
 struct ProvingCtx {
     entry_map: HashMap<Hash32, Vec<u8>>,
     code_map: HashMap<B256, Bytecode>,
@@ -88,15 +91,85 @@ impl Database for ProvingCtx {
     }
 }
 
-fn validate(task: ExeTask, witness: Witness, entries: Vec<Vec<u8>>) {}
+struct Validator<'a> {
+    task: &'a ExeTask,
+    codes: &'a Vec<Bytecode>,
+    entries: &'a Vec<EntryBz<'a>>,
+    leaf_offsets: &'a Vec<(usize, usize)>,
+    witness: &'a Witness,
+    start_sn_for_new_entry: u64,
+    old_root: &'a Hash32,
+    new_root: &'a Hash32,
+}
 
-fn verify_entries(witness: Witness, entries: Vec<Vec<u8>>) {}
+impl<'a> Validator<'a> {
+    fn new(
+        task: &'a ExeTask,
+        codes: &'a Vec<Bytecode>,
+        entries: &'a Vec<EntryBz>,
+        leaf_offsets: &'a Vec<(usize, usize)>,
+        witness: &'a Witness,
+        start_sn_for_new_entry: u64,
+        old_root: &'a Hash32,
+        new_root: &'a Hash32,
+    ) -> Self {
+        Self {
+            task,
+            codes,
+            entries,
+            leaf_offsets,
+            witness,
+            start_sn_for_new_entry,
+            old_root,
+            new_root,
+        }
+    }
 
-fn exec_task(task: ExeTask, entries: Vec<Vec<u8>>) {}
+    fn validate(&self) {
+        let ok = verify_entries(
+            self.start_sn_for_new_entry,
+            self.entries,
+            self.leaf_offsets,
+            self.witness,
+        );
+        let ok = verify_witness(self.witness, self.old_root, self.new_root);
+        self.exec_task();
+    }
 
-fn apply_change_set(witness: Witness, change_set: ChangeSet) {}
+    fn exec_task(&self) {
+        let ctx = ProvingCtx::new(self.entries, self.codes);
 
-fn verify_witness(witness: Witness) {}
+        for idx in 0..self.task.tx_list.len() {
+            self.exec_tx(idx, ctx.clone());
+        }
+    }
+
+    fn exec_tx(&self, idx: usize, db: ProvingCtx) {
+        let env = Box::new(Env {
+            cfg: CfgEnv::default(),
+            block: BlockEnv::default(), // TODO
+            tx: self.task.tx_list[idx].clone(),
+        });
+
+        let count = self.task.get_tx_accessed_slots_count(idx);
+        let handler = create_mpex_handler::<(), ProvingCtx>(count);
+        let mut evm = Evm::builder()
+            .with_db(db.clone())
+            .with_env(env)
+            .with_handler(handler)
+            .build();
+        let evm_result = evm.transact();
+
+        match evm_result {
+            Ok(res_and_state) => {}
+            Err(err) => {
+                // tx_result = Err(anyhow!("EVM transact error: {:?}", err));
+            }
+        }
+    }
+
+    // fn apply_change_set(witness: Witness, change_set: ChangeSet) {}
+}
 
 #[cfg(test)]
 mod tests {

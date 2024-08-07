@@ -536,7 +536,7 @@ fn get_code_hash(entry_bz_data: &[u8]) -> Result<FixedBytes<32>> {
     Ok(FixedBytes::<32>::from_slice(&v[32 + 8..]))
 }
 
-fn create_mpex_handler<'a, EXT, DB: Database>(
+pub fn create_mpex_handler<'a, EXT, DB: Database>(
     access_solts_count: u64,
 ) -> Handler<'a, Evm<'a, (), DB>, (), DB> {
     let mut handler = EvmHandler::<(), DB>::new(HandlerCfg::new(SpecId::LATEST));
