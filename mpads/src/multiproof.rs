@@ -148,16 +148,20 @@ fn _get_pos_list(
 }
 
 fn _sort_pos_list(nodes_set: &HashSet<(u8, u64)>) -> Vec<(u8, u64)> {
-    let leaf_to_nodes_map: HashMap<u64, (u8, u64)> =
-        nodes_set.iter().fold(HashMap::new(), |mut acc, &pos| {
+    let mut leaf_and_pos_list = nodes_set.iter().fold(
+        Vec::<(u64, (u8, u64))>::with_capacity(nodes_set.len()),
+        |mut acc, &pos| {
             let leaf = pos.1 as u64 * u64::pow(2, pos.0 as u32);
-            acc.insert(leaf, pos);
+            acc.push((leaf, pos));
             acc
-        });
+        },
+    );
 
-    let mut vec: Vec<_> = leaf_to_nodes_map.into_iter().collect();
-    vec.sort_by_key(|&(key, _)| key);
-    vec.into_iter().map(|(_, value)| value).collect()
+    leaf_and_pos_list.sort_by_key(|&(key, _)| key);
+    leaf_and_pos_list
+        .into_iter()
+        .map(|(_, value)| value)
+        .collect()
 }
 
 // For each leaf, where to find its own witness and its activebit's witness?
