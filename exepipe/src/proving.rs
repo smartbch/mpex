@@ -9,11 +9,13 @@ use mpads::utils::hasher;
 use revm::db::Database;
 use revm::precompile::primitives::{AccountInfo, Bytecode, B256, U256};
 use revm::precompile::Address;
-use revm::primitives::{BlockEnv, CfgEnv, EVMError, Env, FixedBytes, ResultAndState};
+use revm::primitives::{BlockEnv, CfgEnv, EVMError, Env, FixedBytes, ResultAndState, TxEnv};
 use revm::Evm;
 
 use crate::context::create_mpex_handler;
-use crate::exetask::{get_change_set_and_check_access_rw, AccInfo, ExeTask, ACC_INFO_LEN};
+use crate::exetask::{
+    get_change_set_and_check_access_rw, AccInfo, AccessSet, ExeTask, ACC_INFO_LEN,
+};
 use crate::statecache::StateCache;
 use crate::utils::{decode_account_info, is_empty_code_hash, join_address_index};
 
@@ -96,7 +98,7 @@ impl Database for ProvingCtx {
 }
 
 struct Validator<'a> {
-    task: &'a ExeTask,
+    tx: &'a TxEnv,
     codes: &'a Vec<Bytecode>,
     entries: &'a Vec<EntryBz<'a>>,
     leaf_offsets: &'a Vec<(usize, usize)>,
@@ -108,7 +110,7 @@ struct Validator<'a> {
 
 impl<'a> Validator<'a> {
     fn new(
-        task: &'a ExeTask,
+        tx: &'a TxEnv,
         codes: &'a Vec<Bytecode>,
         entries: &'a Vec<EntryBz>,
         leaf_offsets: &'a Vec<(usize, usize)>,
@@ -118,7 +120,7 @@ impl<'a> Validator<'a> {
         new_root: &'a Hash32,
     ) -> Self {
         Self {
-            task,
+            tx,
             codes,
             entries,
             leaf_offsets,
@@ -137,26 +139,19 @@ impl<'a> Validator<'a> {
             self.witness,
         );
         let ok = verify_witness(self.witness, self.old_root, self.new_root);
-        self.exec_task();
+        self.exec_tx();
     }
 
-    fn exec_task(&self) {
-        let ctx = ProvingCtx::new(self.entries, self.codes);
+    fn exec_tx(&self) -> (Result<ResultAndState>, ChangeSet) {
+        let db = ProvingCtx::new(self.entries, self.codes);
 
-        for idx in 0..self.task.tx_list.len() {
-            self.exec_tx(idx, ctx.clone());
-        }
-    }
-
-    fn exec_tx(&self, idx: usize, db: ProvingCtx) -> (Result<ResultAndState>, ChangeSet) {
         let env = Box::new(Env {
             cfg: CfgEnv::default(),
             block: BlockEnv::default(), // TODO
-            tx: self.task.tx_list[idx].clone(),
+            tx: self.tx.clone(),
         });
 
-        let count = self.task.get_tx_accessed_slots_count(idx);
-        let handler = create_mpex_handler::<(), ProvingCtx>(count);
+        let handler = create_mpex_handler::<(), ProvingCtx>(0);
         let mut evm = Evm::builder()
             .with_db(db.clone())
             .with_env(env)
@@ -175,7 +170,7 @@ impl<'a> Validator<'a> {
             &res_and_state.state,
             &db.orig_acc_map,
             &StateCache::new(),
-            &self.task.access_set,
+            &AccessSet::new(),
             false,
         );
         if let Err(err) = get_cs_result {
