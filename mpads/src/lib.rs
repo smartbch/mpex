@@ -34,9 +34,9 @@ pub mod tree_helper;
 use crate::bptaskhub::{BlockPairTaskHub, Task, TaskHub};
 use crate::compactor::{CompactJob, Compactor};
 use crate::def::{
-    CODE_PATH, COMPACT_RING_SIZE, COMPACT_THRES, DEFAULT_ENTRY_SIZE, IN_BLOCK_IDX_BITS,
-    PREFETCHER_THREAD_COUNT, SENTRY_COUNT, SHARD_COUNT, TASK_CHAN_SIZE, TWIG_SHIFT,
-    UTILIZATION_DIV, UTILIZATION_RATIO, COMPACT_TRIGGER,
+    CODE_PATH, COMPACT_RING_SIZE, COMPACT_THRES, COMPACT_TRIGGER, DEFAULT_ENTRY_SIZE,
+    IN_BLOCK_IDX_BITS, PREFETCHER_THREAD_COUNT, SENTRY_COUNT, SHARD_COUNT, TASK_CHAN_SIZE,
+    TWIG_SHIFT, UTILIZATION_DIV, UTILIZATION_RATIO,
 };
 use crate::entry::{sentry_entry, EntryBz};
 use crate::entrycache::EntryCache;
@@ -471,6 +471,7 @@ pub trait ADS: Send + Sync + 'static {
     fn read_entry(&self, key_hash: &[u8], key: &[u8], buf: &mut [u8]) -> (usize, bool);
     fn read_code(&self, code_hash: &[u8], buf: &mut Vec<u8>) -> usize;
     fn add_task(&self, task_id: i64);
+    fn get_proof(&self, key_hash_list: Vec<[u8; 32]>) -> Vec<Vec<u8>>;
 }
 
 impl ADS for SharedAdsWrap {
@@ -485,6 +486,10 @@ impl ADS for SharedAdsWrap {
 
     fn add_task(&self, task_id: i64) {
         self.ads.add_task(task_id);
+    }
+    fn get_proof(&self, key_hash_list: Vec<[u8; 32]>) -> Vec<Vec<u8>>{
+        // TODO
+        vec![]
     }
 }
 

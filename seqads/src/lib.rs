@@ -1,13 +1,13 @@
 mod entry_loader;
 mod entry_updater;
 mod entry_flusher;
-mod multiproof;
 
 use std::cell::{RefCell};
 use std::fs;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex, RwLock};
 use byteorder::{BigEndian, ByteOrder};
+use mpads::multiproof::{encode_witness, get_witness};
 use mpads::{ADS, AdsCore};
 use mpads::bptaskhub::{Task};
 use mpads::changeset::ChangeSet;
@@ -235,5 +235,42 @@ impl<T: Task + 'static> ADS for SeqAdsWrap<T> {
     fn add_task(&self, task_id: i64) {
         let change_sets = self.tasks_manager.get_tasks_change_sets(task_id as usize);
         self.ads.commit_tx(task_id, &change_sets);
+    }
+
+    fn get_proof(&self, key_hash_list: Vec<[u8; 32]>) -> Vec<Vec<u8>> {
+        let mut proofs = vec![];
+        for shard_id in 0..SHARD_COUNT {
+            let arr = key_hash_list
+                .iter()
+                .filter(|key_hash| key_hash[0] as usize >> 4 == shard_id)
+                .map(|key_hash| key_hash.clone())
+                .collect::<Vec<[u8; 32]>>();
+            let mut bufs = (0..SHARD_COUNT)
+                .map((|_| vec![0; DEFAULT_ENTRY_SIZE]))
+                .collect::<Vec<Vec<u8>>>();
+            for (idx, key_hash) in arr.iter().enumerate() {
+                let (size, found_it) = self.read_entry(key_hash, &[], bufs.get_mut(idx).unwrap());
+                if found_it {
+                    bufs[0].truncate(size);
+                } else {
+                    bufs[0].truncate(0);
+                }
+            }
+
+            let mut sns = vec![];
+            let mut entries = vec![];
+            for buf in &bufs {
+                let entry_bz = EntryBz { bz: buf };
+                sns.push(entry_bz.serial_number());
+                entries.push(entry_bz);
+            }
+
+            let entry_flusher = &self.ads.entry_flusher.lock().unwrap();
+            let shard = &*entry_flusher.shards[shard_id];
+            let witness = get_witness(&sns, &shard.tree);
+            proofs.push(encode_witness(&witness, &entries));
+        }
+
+        vec![]
     }
 }
