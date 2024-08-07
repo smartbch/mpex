@@ -2,7 +2,6 @@
 // use std::thread;
 // use revm::primitives::BlockEnv;
 // use threadpool::ThreadPool;
-// use mpads::AdsWrap;
 // use mpads::tasksmanager::TasksManager;
 // use crate::context::BlockContext;
 // use crate::coordinator::Coordinator;
@@ -18,17 +17,17 @@
 // impl SeqExePipe {
 //     pub fn new(ads: SeqAdsWrap<ExeTask>) -> Self {
 //         let blk_ctx = Arc::new(BlockContext::new(ads));
-//         let tpool = Arc::new(ThreadPool::new(128));
+//         let thread_pool = Arc::new(ThreadPool::new(128));
 //         let (schd_sender, schd_receiver) = mpsc::sync_channel(1024);
 //         let (exec_sender, exec_recevier) = mpsc::sync_channel(8192);
 //         let scheduler = Scheduler::new(
-//             tpool.clone(),
+//             thread_pool.clone(),
 //             blk_ctx.clone(),
 //             schd_sender,
 //             exec_sender.clone(),
 //         );
 //         let coordinator = Some(Coordinator::new(
-//             tpool,
+//             thread_pool,
 //             blk_ctx,
 //             schd_receiver,
 //             exec_sender,
@@ -54,7 +53,7 @@
 //         // create BlockContext for every new block
 //         let mut blk_ctx = BlockContext::new(self.ads.get_shared());
 //         blk_ctx.start_new_block(task_manager, block_env);
-// 
+//
 //         let blk_ctx = Arc::new(blk_ctx);
 //         self.scheduler.start_new_block(height, blk_ctx.clone());
 //

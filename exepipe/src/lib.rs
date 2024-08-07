@@ -25,7 +25,7 @@ use threadpool::ThreadPool;
 
 pub struct ExePipe {
     scheduler: Scheduler<SharedAdsWrap>,
-    coordinator: Option<Coordinator>,
+    coordinator: Option<Coordinator<SharedAdsWrap>>,
     ads: AdsWrap<ExeTask>,
 }
 

@@ -1,7 +1,7 @@
 use crate::context;
 use crate::scheduler::{EarlyExeInfo, EARLY_EXE_WINDOW_SIZE};
 use mpads::def::{IN_BLOCK_IDX_BITS, IN_BLOCK_IDX_MASK};
-use mpads::SharedAdsWrap;
+use mpads::{ADS, SharedAdsWrap};
 use std::collections::{HashMap, HashSet};
 use std::sync::mpsc;
 use std::sync::Arc;
@@ -9,7 +9,7 @@ use threadpool::ThreadPool;
 
 type BlockContext = context::BlockContext<SharedAdsWrap>;
 
-pub struct Coordinator {
+pub struct Coordinator<T: ADS> {
     // scheduled-not-issued tasks:
     early_exe_map: HashMap<i32, i32>,
     // executed-not-sent2ads tasks:
@@ -21,17 +21,17 @@ pub struct Coordinator {
     executed_sender: mpsc::SyncSender<i32>,
     executed_receiver: mpsc::Receiver<i32>,
     tpool: Arc<ThreadPool>,
-    blk_ctx: Arc<BlockContext>,
+    blk_ctx: Arc<context::BlockContext<T>>,
 }
 
-impl Coordinator {
+impl <T:ADS> Coordinator<T> {
     pub fn new(
         tpool: Arc<ThreadPool>,
-        blk_ctx: Arc<BlockContext>,
+        blk_ctx: Arc<context::BlockContext<T>>,
         scheduled_chan: mpsc::Receiver<EarlyExeInfo>,
         executed_sender: mpsc::SyncSender<i32>,
         executed_receiver: mpsc::Receiver<i32>,
-    ) -> Coordinator {
+    ) -> Coordinator<T> {
         Coordinator {
             early_exe_map: HashMap::new(),
             executed_set: HashSet::new(),
@@ -45,7 +45,7 @@ impl Coordinator {
         }
     }
 
-    pub fn start_new_block(&mut self, height: i64, blk_ctx: Arc<BlockContext>) {
+    pub fn start_new_block(&mut self, height: i64, blk_ctx: Arc<context::BlockContext<T>>) {
         self.all_done_index = -1;
         self.height = height;
         self.blk_ctx = blk_ctx;
@@ -134,7 +134,7 @@ impl Coordinator {
 mod tests {
     use std::sync::{Arc, RwLock};
 
-    use mpads::{tasksmanager::TasksManager, test_helper::TempDir};
+    use mpads::{SharedAdsWrap, tasksmanager::TasksManager, test_helper::TempDir};
     use revm::primitives::{BlockEnv, TxEnv};
     use serial_test::serial;
 
@@ -288,7 +288,7 @@ mod tests {
             s,
             r,
         ));
-        let coordinator_p = &mut *coordinator as *mut Coordinator;
+        let coordinator_p = &mut *coordinator as *mut Coordinator<SharedAdsWrap>;
 
         let handle = std::thread::spawn(move || {
             coordinator.run();
