@@ -20,7 +20,6 @@ pub mod proof;
 pub mod recover;
 pub mod refdb;
 pub mod rocksdb;
-pub mod stackmachine;
 pub mod tasksmanager;
 pub mod tree;
 pub mod twig;

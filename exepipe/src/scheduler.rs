@@ -1,7 +1,7 @@
 use crate::context;
 use crate::exetask::{AccessSet, ExeTask};
 use mpads::def::IN_BLOCK_IDX_BITS;
-use mpads::{ADS, SharedAdsWrap};
+use mpads::{SharedAdsWrap, ADS};
 use num_traits::Num;
 use std::collections::VecDeque;
 use std::sync::mpsc;
@@ -163,7 +163,10 @@ pub struct EarlyExeInfo {
     pub min_all_done_index: i32, // task with my_idx does not collide with all task before min_all_done_index.
 }
 
-pub struct Scheduler<T> where T: ADS {
+pub struct Scheduler<T>
+where
+    T: ADS,
+{
     // following three fields need to be updated every block
     height: i64,
     blk_ctx: Arc<context::BlockContext<T>>,
@@ -177,7 +180,7 @@ pub struct Scheduler<T> where T: ADS {
     executed_sender: mpsc::SyncSender<i32>, // send already executed task in scheduled period to coordinator.run()
 }
 
-impl <T:ADS> Scheduler<T> {
+impl<T: ADS> Scheduler<T> {
     pub fn new(
         tpool: Arc<ThreadPool>,
         blk_ctx: Arc<context::BlockContext<T>>,
@@ -311,7 +314,7 @@ impl <T:ADS> Scheduler<T> {
     }
 }
 
-fn prepare_task_and_send_eei<T:ADS>(
+fn prepare_task_and_send_eei<T: ADS>(
     my_idx: usize,
     task_out_start: usize,
     scheduled_chan: mpsc::SyncSender<EarlyExeInfo>,

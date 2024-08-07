@@ -224,13 +224,14 @@ impl ExeTask {
 }
 
 pub fn get_change_set_and_check_access_rw(
-    change_set: &mut ChangeSet,
     state: &HashMap<Address, Account>,
     orig_acc_map: &HashMap<Address, AccInfo>,
     state_cache: &StateCache,
     access_set: &AccessSet, //cannot write read-only members
     check_access: bool,     // end_block logic not need check_access
-) -> Result<()> {
+) -> Result<ChangeSet> {
+    let mut change_set = ChangeSet::new();
+
     let mut buf32 = [0u8; 32];
     let mut acc_buf = [0u8; ACC_INFO_LEN];
     let mut addr_idx = [0u8; 20 + 32];
@@ -316,7 +317,7 @@ pub fn get_change_set_and_check_access_rw(
             );
         }
     }
-    return Ok(());
+    return Ok(change_set);
 }
 
 #[cfg(test)]
@@ -370,7 +371,6 @@ pub mod test_exe_task {
 
     #[test]
     fn test_commit_state_change() {
-        let mut change_set = ChangeSet::new();
         let mut state = HashMap::<Address, Account>::new();
         let from_address = Address::from(U160::from(10));
         let mut from_acc = Account::from(AccountInfo::default());
@@ -413,7 +413,6 @@ pub mod test_exe_task {
         access_set.rnw_set.insert(buf32);
 
         let res = get_change_set_and_check_access_rw(
-            &mut change_set,
             &state,
             &orig_acc_map,
             &state_cache,
@@ -421,6 +420,7 @@ pub mod test_exe_task {
             true,
         );
         assert!(res.is_ok());
+        let change_set = res.unwrap();
         assert_eq!(change_set.op_list.len(), 5);
         let op_set: HashSet<u8> = change_set.op_list.iter().map(|p| p.op_type).collect();
         assert!(op_set.contains(&OP_WRITE));

@@ -218,15 +218,14 @@ mod tests {
             s.info.balance = U256::from(1_000_000_000_000_000_000u128);
         }
 
-        let mut change_set = ChangeSet::new();
-        let _ = get_change_set_and_check_access_rw(
-            &mut change_set,
+        let mut change_set = get_change_set_and_check_access_rw(
             &result.state,
             &HashMap::new(),
             blk_state,
             &AccessSet::new(),
             false,
-        );
+        )
+        .unwrap();
         change_set.sort();
         blk_state.apply_change(&change_set);
 

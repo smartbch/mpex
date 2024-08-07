@@ -237,10 +237,8 @@ impl<T: ADS> BlockContext<T> {
 
         let res_and_state = evm_result.unwrap();
         let gas_used = res_and_state.result.gas_used();
-        let mut change_set = ChangeSet::new();
         // we must check not writing the readonly account and slot.
         let get_cs_result = get_change_set_and_check_access_rw(
-            &mut change_set,
             &res_and_state.state,
             &mut orig_acc_map,
             self.curr_state.as_ref(),
@@ -258,6 +256,7 @@ impl<T: ADS> BlockContext<T> {
         // if no error, update world state
         self.collect_gas_fee(coinbase_gas_price * U256::from(gas_used));
         let tx_result = Ok(res_and_state);
+        let change_set = get_cs_result.unwrap();
         return (tx_result, change_set);
     }
 
@@ -272,7 +271,6 @@ impl<T: ADS> BlockContext<T> {
         let key_hash = hasher::hash(&tx.caller[..]);
         self.basic(&key_hash, &tx.caller, &mut orig_acc_map);
         let orig_data = orig_acc_map.get(&tx.caller);
-        let mut change_set = ChangeSet::new();
         if !orig_data.is_none() {
             let gas_fee = coinbase_gas_price * U256::from(tx.gas_limit);
             let acc = self.deduct_and_collect_caller_gas_fee(&orig_data.unwrap().clone(), gas_fee);
@@ -280,16 +278,16 @@ impl<T: ADS> BlockContext<T> {
             state.insert(tx.caller, acc);
             // it's safe to unwrap the result because the only state change is on tx.caller
             get_change_set_and_check_access_rw(
-                &mut change_set,
                 &state,
                 &orig_acc_map,
                 self.curr_state.as_ref(),
                 &AccessSet::new(),
                 false,
             )
-            .unwrap();
+            .unwrap()
+        } else {
+            ChangeSet::new()
         }
-        change_set
     }
 
     fn deduct_and_collect_caller_gas_fee(
@@ -354,10 +352,8 @@ impl<T: ADS> BlockContext<T> {
             state: state.clone(),
         };
         task_result.push(Ok(state_and_result));
-        let mut change_set = ChangeSet::new();
         let mut task = ExeTask::new(vec![]);
-        get_change_set_and_check_access_rw(
-            &mut change_set,
+        let mut change_set = get_change_set_and_check_access_rw(
             &state,
             &orig_acc_map,
             self.curr_state.as_ref(),
