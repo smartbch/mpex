@@ -13,11 +13,13 @@ use revm::primitives::{BlockEnv, CfgEnv, EVMError, Env, FixedBytes, ResultAndSta
 use revm::Evm;
 
 use crate::context::create_mpex_handler;
-use crate::exetask::{ExeTask, ACC_INFO_LEN};
+use crate::exetask::{get_change_set_and_check_access_rw, AccInfo, ExeTask, ACC_INFO_LEN};
+use crate::statecache::StateCache;
 use crate::utils::{decode_account_info, is_empty_code_hash, join_address_index};
 
 #[derive(Clone)]
 struct ProvingCtx {
+    orig_acc_map: HashMap<Address, AccInfo>,
     entry_map: HashMap<Hash32, Vec<u8>>,
     code_map: HashMap<B256, Bytecode>,
 }
@@ -34,6 +36,7 @@ impl ProvingCtx {
         }
 
         ProvingCtx {
+            orig_acc_map: HashMap::new(),
             entry_map,
             code_map,
         }
@@ -57,6 +60,7 @@ impl Database for ProvingCtx {
             let mut buf = [0u8; ACC_INFO_LEN];
             buf[..ACC_INFO_LEN].copy_from_slice(entry_bz.value());
 
+            self.orig_acc_map.insert(address, buf);
             Ok(Some(decode_account_info(&buf)))
         } else {
             Err(anyhow!("Account {} not found!", address))
@@ -144,7 +148,7 @@ impl<'a> Validator<'a> {
         }
     }
 
-    fn exec_tx(&self, idx: usize, db: ProvingCtx) {
+    fn exec_tx(&self, idx: usize, db: ProvingCtx) -> (Result<ResultAndState>, ChangeSet) {
         let env = Box::new(Env {
             cfg: CfgEnv::default(),
             block: BlockEnv::default(), // TODO
@@ -159,13 +163,29 @@ impl<'a> Validator<'a> {
             .with_handler(handler)
             .build();
         let evm_result = evm.transact();
-
-        match evm_result {
-            Ok(res_and_state) => {}
-            Err(err) => {
-                // tx_result = Err(anyhow!("EVM transact error: {:?}", err));
-            }
+        if let Err(err) = evm_result {
+            return (
+                Err(anyhow!("EVM transact error: {:?}", err)),
+                ChangeSet::new(),
+            );
         }
+
+        let res_and_state = evm_result.unwrap();
+        let get_cs_result = get_change_set_and_check_access_rw(
+            &res_and_state.state,
+            &db.orig_acc_map,
+            &StateCache::new(),
+            &self.task.access_set,
+            false,
+        );
+        if let Err(err) = get_cs_result {
+            return (
+                Err(anyhow!("Commit state change error: {:?}", err)),
+                ChangeSet::new(),
+            );
+        }
+
+        return (Ok(res_and_state), get_cs_result.unwrap());
     }
 
     // fn apply_change_set(witness: Witness, change_set: ChangeSet) {}
