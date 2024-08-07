@@ -30,7 +30,7 @@ impl CodeFlusherShard {
 
 pub struct FlusherShard {
     updater: Arc<Mutex<EntryUpdater>>,
-    tree: Tree,
+    pub tree: Tree,
     last_compact_done_sn: u64,
     shard_id: usize,
 }
@@ -66,7 +66,7 @@ impl FlusherShard {
 }
 
 pub struct EntryFlusher {
-    shards: Vec<Box<FlusherShard>>,
+    pub shards: Vec<Box<FlusherShard>>,
     code_shard: Option<Box<CodeFlusherShard>>,
     meta: Arc<RwLock<MetaDB>>,
 }

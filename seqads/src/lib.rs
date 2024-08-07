@@ -1,6 +1,7 @@
 mod entry_loader;
 mod entry_updater;
 mod entry_flusher;
+mod multiproof;
 
 use std::cell::{RefCell};
 use std::fs;
@@ -51,7 +52,7 @@ pub struct SeqAds {
     code_indexer: Arc<CodeIndexer>,
     meta_db: Arc<RwLock<MetaDB>>,
     entry_cache: EntryCache,
-    entry_loaders: Vec<Mutex<EntryLoader>>,
+    pub entry_loaders: Vec<Mutex<EntryLoader>>,
     entry_updaters: Vec<Arc<Mutex<EntryUpdater>>>,
     code_updater: Arc<Mutex<CodeUpdater>>,
     entry_flusher: Arc<Mutex<EntryFlusher>>,
