@@ -54,7 +54,7 @@
 //         // create BlockContext for every new block
 //         let mut blk_ctx = BlockContext::new(self.ads.get_shared());
 //         blk_ctx.start_new_block(task_manager, block_env);
-//
+// 
 //         let blk_ctx = Arc::new(blk_ctx);
 //         self.scheduler.start_new_block(height, blk_ctx.clone());
 //

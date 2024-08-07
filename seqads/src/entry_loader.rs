@@ -14,7 +14,7 @@ pub struct EntryLoader {
     shard_id : usize,
     entry_file: Arc<EntryFile>,
     cache: Arc<EntryCache>,
-    indexer: Rc<BTreeIndexer>,
+    indexer: Arc<BTreeIndexer>,
     thread_pool: ThreadPool,
 }
 
@@ -23,7 +23,7 @@ impl EntryLoader {
         shard_id : usize,
         entry_file: Arc<EntryFile>,
         cache: Arc<EntryCache>,
-        indexer: Rc<BTreeIndexer>,
+        indexer: Arc<BTreeIndexer>,
     ) -> Self {
         let thread_pool = ThreadPool::new(3);
         Self {

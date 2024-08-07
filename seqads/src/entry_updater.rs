@@ -68,11 +68,11 @@ impl UpdateBuffer {
 
 pub struct CodeUpdater {
     pub update_buffer: UpdateBuffer,
-    pub indexer: Rc<CodeIndexer>,
+    pub indexer: Arc<CodeIndexer>,
 }
 
 impl CodeUpdater {
-    pub fn new(indexer:Rc<CodeIndexer>) -> Self {
+    pub fn new(indexer:Arc<CodeIndexer>) -> Self {
         return Self{
             update_buffer:UpdateBuffer::new(),
             indexer,
@@ -105,7 +105,7 @@ impl CodeUpdater {
 
 pub struct EntryUpdater {
     shard_id: usize,
-    indexer: Rc<BTreeIndexer>,
+    indexer: Arc<BTreeIndexer>,
 
     cache: Arc<EntryCache>,
     entry_file: Arc<EntryFile>,
@@ -123,7 +123,7 @@ impl EntryUpdater {
     pub fn new(
         shard_id: usize,
         entry_file: Arc<EntryFile>,
-        indexer: Rc<BTreeIndexer>,
+        indexer: Arc<BTreeIndexer>,
         curr_version: i64,
         sn_end: u64,
         compact_start:i64,

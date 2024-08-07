@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use mpads::def::{LEAF_COUNT_IN_TWIG};
 use mpads::entryfile::{EntryFile, EntryFileWriter};
@@ -9,11 +9,11 @@ use mpads::tree::{Tree};
 use crate::entry_updater::{CodeUpdater, EntryUpdater};
 
 pub struct CodeFlusherShard {
-    updater: Rc<RefCell<CodeUpdater>>,
+    updater: Arc<Mutex<CodeUpdater>>,
     code_file_wr: EntryFileWriter,
 }
 impl CodeFlusherShard {
-    pub fn new(code_file: Arc<EntryFile>, buffer_size: usize, updater: Rc<RefCell<CodeUpdater>>) -> Self {
+    pub fn new(code_file: Arc<EntryFile>, buffer_size: usize, updater: Arc<Mutex<CodeUpdater>>) -> Self {
         Self {
             updater,
             code_file_wr: EntryFileWriter::new(code_file, buffer_size),
@@ -21,7 +21,7 @@ impl CodeFlusherShard {
     }
 
     pub fn flush(&mut self) {
-        for entry_bz in self.updater.borrow().update_buffer.get_all_entry_bz() {
+        for entry_bz in self.updater.lock().unwrap().update_buffer.get_all_entry_bz() {
             self.code_file_wr.append(&entry_bz);
         }
         self.code_file_wr.flush();
@@ -29,14 +29,14 @@ impl CodeFlusherShard {
 }
 
 pub struct FlusherShard {
-    updater: Rc<RefCell<EntryUpdater>>,
+    updater: Arc<Mutex<EntryUpdater>>,
     tree: Tree,
     last_compact_done_sn: u64,
     shard_id: usize,
 }
 
 impl FlusherShard {
-    pub fn new(tree: Tree, oldest_active_sn: u64, shard_id: usize, updater: Rc<RefCell<EntryUpdater>>) -> Self {
+    pub fn new(tree: Tree, oldest_active_sn: u64, shard_id: usize, updater: Arc<Mutex<EntryUpdater>>) -> Self {
         Self {
             updater,
             tree,
@@ -48,7 +48,7 @@ impl FlusherShard {
     pub fn flush(
         &mut self,
     ) {
-        for entry_bz in self.updater.borrow().get_all_entry_bz() {
+        for entry_bz in self.updater.lock().unwrap().get_all_entry_bz() {
             self.tree.append_entry(&entry_bz);
             for i in 0..entry_bz.dsn_count() {
                 let dsn = entry_bz.get_deactived_sn(i);
