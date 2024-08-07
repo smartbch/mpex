@@ -41,8 +41,8 @@ fn main() {
     let mut test_gen = TestGenV2::new(randsrc, total_bits);
 
     let ads_dir = "ADS";
-    let wrbuf_size = 1 * 1024 * 1024; //1MB
-    let file_block_size = 1024 * 1024 * 1024; //1GB
+    let wrbuf_size = 8 * 1024 * 1024; //8MB
+    let file_block_size = 2 * 1024 * 1024 * 1024; //2GB
     AdsCore::init_dir(ads_dir, file_block_size);
     let mut ads = AdsWrap::new(ads_dir, wrbuf_size, file_block_size);
 
@@ -138,7 +138,7 @@ impl TestGenV2 {
     pub fn new(randsrc: RandSrc, total_bits: usize) -> Self {
         Self {
             op_in_cset: 8,
-            cset_in_task: 2,
+            cset_in_task: 8,
             task_in_block: 8 * 1024,
             cur_num: 0,
             cur_round: 0,

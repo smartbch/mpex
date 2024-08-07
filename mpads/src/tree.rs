@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use std::{fmt, mem};
-use std::{fs, thread};
+use std::{fmt, fs, mem, thread};
+use rayon;
 
 use rand_core::le;
 
@@ -226,23 +226,17 @@ impl UpperTree {
         let mut written_nodes = self.nodes.swap_remove(level as usize);
 
         let mut new_list = Vec::with_capacity(n_list.len());
-        thread::scope(|s| {
-            let mut node_threads = Vec::with_capacity(NODE_SHARD_COUNT);
-            for shard_id in (0..NODE_SHARD_COUNT).rev() {
-                let nodes = written_nodes.pop().unwrap(); //taken out from written_nodes
+        rayon::scope(|s| {
+            for (shard_id, nodes) in written_nodes.iter_mut().enumerate() {
                 let n_list = &n_list[..];
                 let upper_tree = &*self; // change a mutable borrow to an immutable borrow
-                node_threads
-                    .push(s.spawn(move || do_sync_job(upper_tree, nodes, level, shard_id, n_list)));
+                let id: usize = shard_id;
+                s.spawn(move |_| do_sync_job(upper_tree, nodes, level, id, n_list));
             }
             for i in &n_list {
                 if new_list.is_empty() || *new_list.last().unwrap() != i / 2 {
                     new_list.push(i / 2);
                 }
-            }
-            for _ in 0..NODE_SHARD_COUNT {
-                let node_thread = node_threads.pop().unwrap();
-                written_nodes.push(node_thread.join().unwrap()); // return back to written_nodes
             }
         });
 
@@ -288,13 +282,11 @@ impl UpperTree {
 
     pub fn sync_mt_for_active_bits_phase2(&mut self, mut n_list: Vec<u64>) -> Vec<u64> {
         let mut new_list = Vec::with_capacity(n_list.len());
-        thread::scope(|s| {
-            let mut twig_threads = Vec::with_capacity(TWIG_SHARD_COUNT);
-            for shard_id in (0..TWIG_SHARD_COUNT).rev() {
+        rayon::scope(|s| {
+            for (i, twig_shard) in self.active_twig_shards.iter_mut().enumerate() {
                 let n_list = &n_list;
-                // we take twig_shard out from active_twig_shards
-                let mut twig_shard = self.active_twig_shards.pop().unwrap();
-                twig_threads.push(s.spawn(move || {
+                let shard_id: usize = i;
+                s.spawn(move |_| {
                     for i in n_list {
                         let twig_id = i >> 1;
                         let (s, k) = get_shard_idx_and_key(twig_id);
@@ -303,8 +295,7 @@ impl UpperTree {
                         };
                         twig_shard.get_mut(&k).unwrap().sync_l2((i & 1) as i32);
                     }
-                    twig_shard
-                }));
+                });
             }
 
             for i in &n_list {
@@ -312,22 +303,15 @@ impl UpperTree {
                     new_list.push(i / 2);
                 }
             }
-            // we return twig_shard back into active_twig_shards
-            for _ in 0..TWIG_SHARD_COUNT {
-                let twig_thread = twig_threads.pop().unwrap();
-                self.active_twig_shards.push(twig_thread.join().unwrap());
-            }
         });
 
         mem::swap(&mut new_list, &mut n_list);
         new_list.clear();
-        thread::scope(|s| {
-            let mut twig_threads = Vec::with_capacity(TWIG_SHARD_COUNT);
-            for shard_id in (0..TWIG_SHARD_COUNT).rev() {
+        rayon::scope(|s| {
+            for (i, twig_shard) in self.active_twig_shards.iter_mut().enumerate() {
                 let n_list = &n_list;
-                // we take twig_shard out from active_twig_shards
-                let mut twig_shard = self.active_twig_shards.pop().unwrap();
-                twig_threads.push(s.spawn(move || {
+                let shard_id: usize = i;
+                s.spawn(move |_| {
                     for twig_id in n_list {
                         let (s, k) = get_shard_idx_and_key(*twig_id);
                         if s != shard_id {
@@ -336,19 +320,13 @@ impl UpperTree {
                         twig_shard.get_mut(&k).unwrap().sync_l3();
                         twig_shard.get_mut(&k).unwrap().sync_top();
                     }
-                    twig_shard
-                }));
+                });
             }
 
             for i in &n_list {
                 if new_list.is_empty() || *new_list.last().unwrap() != i / 2 {
                     new_list.push(i / 2);
                 }
-            }
-            // we return twig_shard back into active_twig_shards
-            for _ in 0..TWIG_SHARD_COUNT {
-                let twig_thread = twig_threads.pop().unwrap();
-                self.active_twig_shards.push(twig_thread.join().unwrap());
             }
         });
 
@@ -358,11 +336,11 @@ impl UpperTree {
 
 fn do_sync_job(
     upper_tree: &UpperTree,
-    mut nodes: HashMap<NodePos, [u8; 32]>,
+    nodes: &mut HashMap<NodePos, [u8; 32]>,
     level: i64,
     shard_id: usize,
     n_list: &[u64],
-) -> HashMap<NodePos, [u8; 32]> {
+) {
     let child_nodes = upper_tree.nodes.get((level - 1) as usize).unwrap();
     for &i in n_list {
         if i as usize % NODE_SHARD_COUNT != shard_id {
@@ -428,7 +406,6 @@ fn do_sync_job(
             nodes.insert(pos, hash);
         }
     }
-    nodes
 }
 
 pub struct Tree {
@@ -628,32 +605,31 @@ impl Tree {
         let mut twig_file_tmp = self.twig_file_wr.temp_clone();
         mem::swap(&mut entry_file_tmp, &mut self.entry_file_wr);
         mem::swap(&mut twig_file_tmp, &mut self.twig_file_wr);
-        // run flushing in a threads such that sync_* won't be blocked
-        let ef_handler = thread::spawn(move || {
-            entry_file_tmp.flush();
-            entry_file_tmp
-        });
-        let tf_handler = thread::spawn(move || {
-            twig_file_tmp.flush();
-            twig_file_tmp
-        });
-        self.sync_mt_for_youngest_twig(false);
-        let youngest_twig = self.new_twig_map.get(&self.youngest_twig_id).unwrap();
-        let mut twig_map = HashMap::new();
-        twig_map.insert(self.youngest_twig_id, youngest_twig.clone());
-        mem::swap(&mut self.new_twig_map, &mut twig_map);
-        //add new_twig_map's old content to upper_tree
-        self.upper_tree.add_twigs(twig_map);
-        //now, new_twig_map only contains one member: youngest_twig.clone()
+        let n_list = thread::scope(|s| {
+            // run flushing in a threads such that sync_* won't be blocked
+            s.spawn(|| {
+                entry_file_tmp.flush();
+            });
+            s.spawn(|| {
+                twig_file_tmp.flush();
+            });
+            self.sync_mt_for_youngest_twig(false);
+            let youngest_twig = self.new_twig_map.get(&self.youngest_twig_id).unwrap();
+            let mut twig_map = HashMap::new();
+            twig_map.insert(self.youngest_twig_id, youngest_twig.clone());
+            mem::swap(&mut self.new_twig_map, &mut twig_map);
+            //add new_twig_map's old content to upper_tree
+            self.upper_tree.add_twigs(twig_map);
+            //now, new_twig_map only contains one member: youngest_twig.clone()
 
-        let n_list = self.sync_mt_for_active_bits_phase1();
-        for twig_id in twig_delete_start..twig_delete_end {
-            let (shard_idx, key) = get_shard_idx_and_key(twig_id);
-            self.active_bit_shards[shard_idx].remove(&key);
-        }
-        self.touched_pos_of_512b.clear();
-        entry_file_tmp = ef_handler.join().unwrap();
-        twig_file_tmp = tf_handler.join().unwrap();
+            let n_list = self.sync_mt_for_active_bits_phase1();
+            for twig_id in twig_delete_start..twig_delete_end {
+                let (shard_idx, key) = get_shard_idx_and_key(twig_id);
+                self.active_bit_shards[shard_idx].remove(&key);
+            }
+            self.touched_pos_of_512b.clear();
+            n_list
+        });
         mem::swap(&mut entry_file_tmp, &mut self.entry_file_wr);
         mem::swap(&mut twig_file_tmp, &mut self.twig_file_wr);
         n_list
@@ -668,14 +644,12 @@ impl Tree {
         n_list.sort();
 
         let mut new_list = Vec::with_capacity(n_list.len());
-        return thread::scope(|s| {
-            let mut twig_threads = Vec::with_capacity(TWIG_SHARD_COUNT);
-            for shard_id in (0..TWIG_SHARD_COUNT).rev() {
+        return rayon::scope(|s| {
+            for (i, twig_shard) in self.upper_tree.active_twig_shards.iter_mut().enumerate() {
                 let active_bits_shards = &self.active_bit_shards;
                 let n_list = &n_list;
-                // we take twig_shard out from active_twig_shards
-                let mut twig_shard = self.upper_tree.active_twig_shards.pop().unwrap();
-                twig_threads.push(s.spawn(move || {
+                let shard_id: usize = i;
+                s.spawn(move |_| {
                     for i in n_list {
                         let twig_id = i >> 2;
                         let (s, k) = get_shard_idx_and_key(twig_id);
@@ -688,20 +662,12 @@ impl Tree {
                             .unwrap()
                             .sync_l1((i & 3) as i32, active_bits);
                     }
-                    twig_shard
-                }));
+                });
             }
             for i in &n_list {
                 if new_list.is_empty() || *new_list.last().unwrap() != i / 2 {
                     new_list.push(i / 2);
                 }
-            }
-            // we return twig_shard back into active_twig_shards
-            for _ in 0..TWIG_SHARD_COUNT {
-                let twig_thread = twig_threads.pop().unwrap();
-                self.upper_tree
-                    .active_twig_shards
-                    .push(twig_thread.join().unwrap());
             }
             new_list
         });

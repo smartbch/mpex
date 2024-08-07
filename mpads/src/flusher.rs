@@ -27,7 +27,7 @@ impl BarrierSet {
 
 pub struct Flusher {
     shards: Vec<Box<FlusherShard>>,
-    code_shard: Option<Box<FlusherShardForCode>>,
+    code_shard: Box<FlusherShardForCode>,
     meta: Arc<RwLock<RocksMetaDB>>,
     curr_height: i64,
     max_kept_height: i64,
@@ -37,7 +37,7 @@ pub struct Flusher {
 impl Flusher {
     pub fn new(
         shards: Vec<Box<FlusherShard>>,
-        code_shard: Option<Box<FlusherShardForCode>>,
+        code_shard: Box<FlusherShardForCode>,
         meta: Arc<RwLock<RocksMetaDB>>,
         curr_height: i64,
         max_kept_height: i64,
@@ -59,30 +59,21 @@ impl Flusher {
             let prune_to_height = self.curr_height - self.max_kept_height;
             let bar_set = Arc::new(BarrierSet::new(shard_count));
             thread::scope(|s| {
-                let mut handlers = Vec::with_capacity(shard_count);
-                let mut code_shard = self.code_shard.take().unwrap();
+                let code_shard = &mut self.code_shard;
                 let meta_for_code = self.meta.clone();
                 let bar_set_for_code = bar_set.clone();
                 let curr_height = self.curr_height;
-                let code_handler = s.spawn(move || {
+                s.spawn(move || {
                     code_shard.flush(curr_height, meta_for_code, bar_set_for_code);
-                    code_shard
                 });
-                for _ in (0..shard_count).rev() {
+                for shard in self.shards.iter_mut() {
                     let bar_set = bar_set.clone();
-                    let mut shard = self.shards.pop().unwrap();
                     let curr_height = self.curr_height;
                     let meta = self.meta.clone();
                     let end_block_chan = self.end_block_chan.clone();
-                    handlers.push(s.spawn(move || {
+                    s.spawn(move || {
                         shard.flush(prune_to_height, curr_height, meta, bar_set, end_block_chan);
-                        shard
-                    }));
-                }
-                self.code_shard = Some(code_handler.join().unwrap());
-                for _ in 0..shard_count {
-                    let handler = handlers.pop().unwrap();
-                    self.shards.push(handler.join().unwrap());
+                    });
                 }
             });
         }
@@ -97,7 +88,7 @@ impl Flusher {
     }
 
     pub fn set_code_buf_reader(&mut self, ebr: EntryBufferReader) {
-        self.code_shard.as_mut().unwrap().buf_read = Some(ebr);
+        self.code_shard.buf_read = Some(ebr);
     }
 }
 
@@ -344,10 +335,10 @@ mod flusher_tests {
 
         let mut flusher = Flusher {
             shards: Vec::with_capacity(1),
-            code_shard: Some(Box::new(FlusherShardForCode {
+            code_shard: Box::new(FlusherShardForCode {
                 buf_read: Some(c_eb_rd),
                 code_file_wr: EntryFileWriter::new(code_file.clone(), 1024),
-            })),
+            }),
             meta,
             curr_height: 0,
             max_kept_height: 1000,

@@ -19,6 +19,7 @@ threadpool = "1.8.1"
 atomptr = "1.4.1"
 rand_core = { version = "0.6.4", features = ["getrandom"] }
 time = "0.3.36"
+rayon = "1.10.0"
 
 [build-dependencies]
 cc = "1.0"

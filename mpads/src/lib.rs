@@ -87,10 +87,10 @@ impl AdsCore {
         ));
         let code_idxr = CodeIndexer::new();
         Self::index_code(&code_file, &code_idxr);
-        let code_shard = Some(Box::new(FlusherShardForCode::new(
+        let code_shard = Box::new(FlusherShardForCode::new(
             code_file.clone(),
             wrbuf_size,
-        )));
+        ));
 
         let indexer = Arc::new(BTreeIndexer::new(1 << 16));
         let (eb_sender, eb_receiver) = sync_channel(2);
