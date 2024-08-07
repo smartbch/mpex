@@ -42,6 +42,18 @@ impl<T: Task + 'static> SeqAdsWrap<T> {
         self.cache = Arc::new(EntryCache::new());
         self.tasks_manager = tasks_manager;
     }
+
+    pub fn get_shared(&self) -> Self {
+        return Self{
+            tasks_manager:self.tasks_manager.clone(),
+            ads: self.ads.clone(),
+            cache: self.cache.clone(),
+        }
+    }
+
+    pub fn commit_block(&mut self, height:i64) {
+        self.ads.commit_block(height);
+    }
 }
 
 pub struct SeqAds {
@@ -157,7 +169,7 @@ impl SeqAds {
         self.entry_flusher.lock().unwrap().flush_tx(SHARD_COUNT + 1);
     }
 
-    pub fn commit_block(&mut self, height: i64) {
+    pub fn commit_block(&self, height: i64) {
         self.entry_flusher.lock().unwrap().flush_block(height);
     }
 }
