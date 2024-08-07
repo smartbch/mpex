@@ -1076,6 +1076,7 @@ dependencies = [
  "anyhow",
  "atomptr",
  "byteorder",
+ "cc",
  "crossbeam-utils",
  "hex",
  "lazy_static",

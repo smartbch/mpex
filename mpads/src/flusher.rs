@@ -204,7 +204,10 @@ impl FlusherShard {
             if end_twig_id == u64::MAX {
                 panic!("FirstTwigAtHeight Not Found");
             }
-            let last_evicted_twig_id = compact_done_sn / (LEAF_COUNT_IN_TWIG as u64) - 1;
+            let mut last_evicted_twig_id = compact_done_sn / (LEAF_COUNT_IN_TWIG as u64);
+            if last_evicted_twig_id > 0 {
+                last_evicted_twig_id -= 1;
+            }
             if end_twig_id > last_evicted_twig_id {
                 end_twig_id = last_evicted_twig_id;
             }
