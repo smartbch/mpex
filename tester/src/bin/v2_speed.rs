@@ -119,11 +119,17 @@ impl ShuffleParam {
     pub fn change(&self, mut x: u64) -> u64 {
         let mask = (1u64 << self.total_bits) - 1;
         x = x.reverse_bits() >> (64 - self.total_bits);
-        x = (x + self.add_num) & mask;
+        x = x + self.add_num;
         x = (!x) & mask;
-        x = ((x>>self.rotate_bits) | (x<<(self.total_bits-self.rotate_bits))) & mask;
-        x = (x ^ self.xor_num) & mask;
-        x
+        x = (x>>self.rotate_bits) | (x<<(self.total_bits-self.rotate_bits));
+        x = x ^ self.xor_num;
+
+        let mut buf = [0u8; 8];
+        BigEndian::write_u64(&mut buf[..8], x);
+        let hash = hasher::hash(&buf[..]);
+        x = BigEndian::read_u64(&hash[..8]);
+
+        x & mask
     }
 }
 
