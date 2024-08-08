@@ -377,7 +377,6 @@ mod flusher_tests {
         }
 
         let entry_file = tree.entry_file_wr.entry_file.clone();
-        let (ut_sender, ut_receiver) = sync_channel(2);
         let fs = FlusherShard::new(tree, 0, shard_id);
 
         flusher.shards.push(Box::new(fs));
@@ -404,7 +403,6 @@ mod flusher_tests {
         let mut buf = [0; 1024];
         let size0 = entry_file.read_entry(pos0, &mut buf);
         assert_eq!(buf[..size0], *bz0.bz);
-        let mut upper_tree = ut_receiver.recv().unwrap();
 
         let meta = meta.read().unwrap();
         let oldest_active_sn = meta.get_oldest_active_sn(shard_id);
@@ -433,12 +431,5 @@ mod flusher_tests {
         check_hash_consistency(&tree);
         let mut proof_path = tree.get_proof(SENTRY_COUNT as u64);
         check_proof(&mut proof_path).unwrap();
-        unsafe {
-            let mut tree = &mut (*tree_p);
-            mem::swap(&mut tree.upper_tree, &mut upper_tree);
-            check_hash_consistency(&tree);
-            let mut proof_path = tree.get_proof(SENTRY_COUNT as u64);
-            assert_eq!(check_proof(&mut proof_path).is_ok(), true);
-        }
     }
 }
