@@ -131,7 +131,7 @@ impl EntryUpdater {
     ) -> Self {
         Self {
             shard_id,
-            cache: Arc::new(EntryCache::new_uninit()),
+            cache: Arc::new(EntryCache::new_uint()),
             entry_file,
             indexer,
             read_entry_buf: Vec::with_capacity(DEFAULT_ENTRY_SIZE),

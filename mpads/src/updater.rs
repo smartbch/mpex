@@ -92,7 +92,7 @@ impl Updater {
             shard_id,
             task_hub,
             update_buffer,
-            cache: Arc::new(EntryCache::new_uninit()),
+            cache: Arc::new(EntryCache::new_uint()),
             entry_file,
             indexer,
             read_entry_buf: Vec::with_capacity(DEFAULT_ENTRY_SIZE),
