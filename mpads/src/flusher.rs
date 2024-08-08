@@ -1,4 +1,4 @@
-use crate::def::{LEAF_COUNT_IN_TWIG, PRUNE_EVERY_NBLOCKS, MIN_PRUNE_COUNT, TWIG_SHIFT};
+use crate::def::{LEAF_COUNT_IN_TWIG, MIN_PRUNE_COUNT, PRUNE_EVERY_NBLOCKS, TWIG_SHIFT};
 use crate::entrybuffer::EntryBufferReader;
 use crate::entryfile::{EntryFile, EntryFileWriter};
 use crate::metadb::MetaDB;
@@ -229,9 +229,10 @@ impl FlusherShard {
             );
             let (_new_n_list, root_hash) = upper_tree.sync_upper_nodes(n_list, youngest_twig_id);
             let mut edge_nodes_bytes = Vec::<u8>::with_capacity(0);
-            if prune_to_height > 0 &&
-                prune_to_height % PRUNE_EVERY_NBLOCKS == 0 &&
-                start_twig_id < end_twig_id {
+            if prune_to_height > 0
+                && prune_to_height % PRUNE_EVERY_NBLOCKS == 0
+                && start_twig_id < end_twig_id
+            {
                 edge_nodes_bytes =
                     upper_tree.prune_nodes(start_twig_id, end_twig_id, youngest_twig_id);
             }

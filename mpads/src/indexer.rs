@@ -182,7 +182,10 @@ impl BTreeIndexerCpp {
 
         let iter = unsafe { cppbtree_seek(tree, k48) };
         if unsafe { !is_first(tree, iter) } {
-            let k = unsafe { iter_prev(iter); iter_key(iter) };
+            let k = unsafe {
+                iter_prev(iter);
+                iter_key(iter)
+            };
             let k_with_idx = ((idx << 48) as u64) | k;
             loop {
                 if unsafe { iter_key(iter) } == k {
@@ -493,10 +496,7 @@ mod tests {
         bt.add_kv(0x0004000300020001, 0x00);
 
         assert_eq!(
-            [
-                (0x0004000300020001, 0x10),
-                (0x0004000300020001, 0),
-            ],
+            [(0x0004000300020001, 0x10), (0x0004000300020001, 0),],
             get_all_adjacent_values(&bt, 0x0004000300020001).as_slice()
         );
 

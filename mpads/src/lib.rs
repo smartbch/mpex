@@ -87,10 +87,7 @@ impl AdsCore {
         ));
         let code_idxr = CodeIndexer::new();
         Self::index_code(&code_file, &code_idxr);
-        let code_shard = Box::new(FlusherShardForCode::new(
-            code_file.clone(),
-            wrbuf_size,
-        ));
+        let code_shard = Box::new(FlusherShardForCode::new(code_file.clone(), wrbuf_size));
 
         let indexer = Arc::new(BTreeIndexer::new(1 << 16));
         let (eb_sender, eb_receiver) = sync_channel(2);
@@ -487,7 +484,7 @@ impl ADS for SharedAdsWrap {
     fn add_task(&self, task_id: i64) {
         self.ads.add_task(task_id);
     }
-    fn get_proof(&self, key_hash_list: Vec<[u8; 32]>) -> Vec<Vec<u8>>{
+    fn get_proof(&self, key_hash_list: Vec<[u8; 32]>) -> Vec<Vec<u8>> {
         // TODO
         vec![]
     }

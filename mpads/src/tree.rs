@@ -1,7 +1,7 @@
+use rayon;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::{fmt, fs, mem, thread};
-use rayon;
 
 use rand_core::le;
 

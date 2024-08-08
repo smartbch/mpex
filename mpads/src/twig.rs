@@ -9,7 +9,7 @@ use crate::utils::hasher;
 // global variables
 lazy_static! {
     pub static ref NULL_MT_FOR_TWIG: Box<TwigMT> = get_init_data().0;
-    pub static ref NULL_TWIG: Box<Twig>  = get_init_data().1;
+    pub static ref NULL_TWIG: Box<Twig> = get_init_data().1;
     pub static ref NULL_NODE_IN_HIGHER_TREE: [[u8; 32]; 64] = get_init_data().2;
     pub static ref NULL_ACTIVE_BITS: ActiveBits = ActiveBits::new();
 }
