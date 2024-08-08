@@ -468,7 +468,6 @@ pub trait ADS: Send + Sync + 'static {
     fn read_entry(&self, key_hash: &[u8], key: &[u8], buf: &mut [u8]) -> (usize, bool);
     fn read_code(&self, code_hash: &[u8], buf: &mut Vec<u8>) -> usize;
     fn add_task(&self, task_id: i64);
-    fn get_proof(&self, key_hash_list: Vec<[u8; 32]>) -> Vec<Vec<u8>>;
 }
 
 impl ADS for SharedAdsWrap {
@@ -483,10 +482,6 @@ impl ADS for SharedAdsWrap {
 
     fn add_task(&self, task_id: i64) {
         self.ads.add_task(task_id);
-    }
-    fn get_proof(&self, key_hash_list: Vec<[u8; 32]>) -> Vec<Vec<u8>> {
-        // TODO
-        vec![]
     }
 }
 

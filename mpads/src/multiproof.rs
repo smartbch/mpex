@@ -68,7 +68,11 @@ fn leaf_to_nth_for_activebits(leaf: u64) -> u64 {
 // get all the leaf nodes and internal nodes that must be included in
 // the witness data to prove the accessed entries
 // sns should include the serial number of last entry
-pub fn get_witness(sn_list: &Vec<u64>, tree: &Tree) -> Witness {
+pub fn get_witness(
+    sn_list: &Vec<u64>,
+    only_active_bits_sn_list: &Vec<u64>,
+    tree: &Tree,
+) -> Witness {
     let max_sn = sn_list.iter().max().unwrap();
     let max_level = calc_max_level(max_sn >> TWIG_SHIFT) as u8;
     let leaves: Vec<u64> = sn_list.iter().map(|&sn| sn_to_leaf(sn)).collect();
@@ -84,6 +88,16 @@ pub fn get_witness(sn_list: &Vec<u64>, tree: &Tree) -> Witness {
         pos_set.insert((8, activebits_leaf_nth));
         _get_pos_list(max_level - 1, &mut pos_set, 8, activebits_leaf_nth);
     }
+
+    for &leaf in only_active_bits_sn_list.iter() {
+        if leaf % 4096 >= 2048 {
+            panic!("not at the left tree of a twig");
+        }
+        let activebits_leaf_nth = leaf_to_nth_for_activebits(leaf);
+        pos_set.insert((8, activebits_leaf_nth));
+        _get_pos_list(max_level - 1, &mut pos_set, 8, activebits_leaf_nth);
+    }
+
     //  clean up the nodes that are not necessary
     for leaf in leaves {
         for level in 1..=max_level {
@@ -96,6 +110,7 @@ pub fn get_witness(sn_list: &Vec<u64>, tree: &Tree) -> Witness {
         }
     }
 
+    // TODO sn_end will is null hash
     let pos_list = _sort_pos_list(&pos_set);
     let hash_list = tree.get_hashes_by_pos_list(&pos_list);
     let mut witness = Vec::<MultiProofNode>::with_capacity(pos_list.len());
@@ -437,6 +452,8 @@ mod tests {
     use core::hash;
     use std::collections::HashMap;
 
+    use rayon::vec;
+
     use crate::{
         check,
         def::{DEFAULT_ENTRY_SIZE, ENTRY_FIXED_LENGTH, SENTRY_COUNT, TWIG_MASK},
@@ -460,7 +477,7 @@ mod tests {
         let (tree, _, _, _) = create_tree(dir_name, true);
 
         let sns = vec![0, 9787];
-        let witness = get_witness(&sns, &tree);
+        let witness = get_witness(&sns, &vec![], &tree);
 
         let b = verify_witness(
             &witness,
@@ -495,7 +512,7 @@ mod tests {
             // produce witness
             let (mut tree, mut pos_list, mut serial_number, mut entry_bzs) =
                 create_tree(dir_name, true);
-            let witness = get_witness(&sns, &tree);
+            let witness = get_witness(&sns, &vec![], &tree);
             for sn in &sns[0..2] {
                 input_entry_bz_list.push(entry_bzs[*sn as usize].clone());
             }
@@ -580,7 +597,7 @@ mod tests {
         let (tree, _, _, entry_bzs) = create_tree(dir_name, true);
 
         let sns = vec![9787];
-        let witness = get_witness(&sns, &tree);
+        let witness = get_witness(&sns, &vec![], &tree);
 
         let mut entries = vec![];
         for sn in sns {

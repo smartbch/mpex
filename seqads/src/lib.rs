@@ -1,26 +1,27 @@
+mod entry_flusher;
 mod entry_loader;
 mod entry_updater;
-mod entry_flusher;
+mod proof;
 
-use std::cell::{RefCell};
-use std::fs;
-use std::rc::Rc;
-use std::sync::{Arc, Mutex, RwLock};
-use byteorder::{BigEndian, ByteOrder};
-use mpads::multiproof::{encode_witness, get_witness};
-use mpads::{ADS, AdsCore};
-use mpads::bptaskhub::{Task};
-use mpads::changeset::ChangeSet;
-use mpads::def::{CODE_PATH, DEFAULT_ENTRY_SIZE, SHARD_COUNT};
-use mpads::entry::{EntryBz};
-use mpads::entrycache::EntryCache;
-use mpads::entryfile::{EntryFile};
-use mpads::indexer::{BTreeIndexer, CodeIndexer};
-use mpads::metadb::{MetaDB};
-use mpads::tasksmanager::TasksManager;
 use crate::entry_flusher::{CodeFlusherShard, EntryFlusher, FlusherShard};
 use crate::entry_loader::EntryLoader;
 use crate::entry_updater::{CodeUpdater, EntryUpdater};
+use byteorder::{BigEndian, ByteOrder};
+use mpads::bptaskhub::Task;
+use mpads::changeset::ChangeSet;
+use mpads::def::{CODE_PATH, DEFAULT_ENTRY_SIZE, SHARD_COUNT};
+use mpads::entry::EntryBz;
+use mpads::entrycache::EntryCache;
+use mpads::entryfile::EntryFile;
+use mpads::indexer::{BTreeIndexer, CodeIndexer};
+use mpads::metadb::MetaDB;
+use mpads::multiproof::{encode_witness, get_witness};
+use mpads::tasksmanager::TasksManager;
+use mpads::{AdsCore, ADS};
+use std::cell::RefCell;
+use std::fs;
+use std::rc::Rc;
+use std::sync::{Arc, Mutex, RwLock};
 
 pub struct SeqAdsWrap<T: Task> {
     tasks_manager: Arc<TasksManager<T>>,
@@ -30,9 +31,9 @@ pub struct SeqAdsWrap<T: Task> {
 
 impl<T: Task + 'static> SeqAdsWrap<T> {
     pub fn new(dir: &str, wrbuf_size: usize, file_segment_size: usize) -> Self {
-        let ads= SeqAds::new(dir, wrbuf_size, file_segment_size);
+        let ads = SeqAds::new(dir, wrbuf_size, file_segment_size);
         Self {
-            tasks_manager:Arc::new(TasksManager::default()),
+            tasks_manager: Arc::new(TasksManager::default()),
             ads: Arc::new(ads),
             cache: Arc::new(EntryCache::new_uninit()),
         }
@@ -44,14 +45,14 @@ impl<T: Task + 'static> SeqAdsWrap<T> {
     }
 
     pub fn get_shared(&self) -> Self {
-        return Self{
-            tasks_manager:self.tasks_manager.clone(),
+        return Self {
+            tasks_manager: self.tasks_manager.clone(),
             ads: self.ads.clone(),
             cache: self.cache.clone(),
-        }
+        };
     }
 
-    pub fn commit_block(&mut self, height:i64) {
+    pub fn commit_block(&mut self, height: i64) {
         self.ads.commit_block(height);
     }
 }
@@ -71,11 +72,7 @@ pub struct SeqAds {
 }
 
 impl SeqAds {
-    pub fn new(
-        dir: &str,
-        write_buf_size: usize,
-        file_segment_size: usize,
-    ) -> Self {
+    pub fn new(dir: &str, write_buf_size: usize, file_segment_size: usize) -> Self {
         let data_dir = dir.to_owned() + "/data";
         let code_dir = format!("{}/{}{}", data_dir, CODE_PATH, "bc");
         let _ = fs::create_dir_all(&code_dir);
@@ -118,11 +115,22 @@ impl SeqAds {
 
             let entry_file = tree.entry_file_wr.entry_file.clone();
             entry_files.push(entry_file.clone());
-            let sn_end =  meta.clone().read().unwrap().get_next_serial_num(shard_id);
-            let compact_start =  meta.clone().read().unwrap().get_oldest_active_file_pos(shard_id);
-            let oldest_active_sn =  meta.clone().read().unwrap().get_oldest_active_sn(shard_id);
-            let updater = Arc::new(Mutex::new(
-                EntryUpdater::new(shard_id, entry_file.clone(), indexer.clone(), -1, sn_end, compact_start, 10000)));
+            let sn_end = meta.clone().read().unwrap().get_next_serial_num(shard_id);
+            let compact_start = meta
+                .clone()
+                .read()
+                .unwrap()
+                .get_oldest_active_file_pos(shard_id);
+            let oldest_active_sn = meta.clone().read().unwrap().get_oldest_active_sn(shard_id);
+            let updater = Arc::new(Mutex::new(EntryUpdater::new(
+                shard_id,
+                entry_file.clone(),
+                indexer.clone(),
+                -1,
+                sn_end,
+                compact_start,
+                10000,
+            )));
             shards.push(Box::new(FlusherShard::new(
                 tree,
                 oldest_active_sn,
@@ -135,12 +143,17 @@ impl SeqAds {
         let flusher = Arc::new(Mutex::new(EntryFlusher::new(
             shards,
             code_shard,
-            meta.clone()
+            meta.clone(),
         )));
         let entry_cache = Arc::new(EntryCache::new());
         let mut entry_loaders = Vec::<Mutex<EntryLoader>>::with_capacity(SHARD_COUNT);
         for i in 0..SHARD_COUNT {
-            entry_loaders[i] = Mutex::new(EntryLoader::new(i, entry_files[i].clone(), entry_cache.clone(), indexer.clone()));
+            entry_loaders[i] = Mutex::new(EntryLoader::new(
+                i,
+                entry_files[i].clone(),
+                entry_cache.clone(),
+                indexer.clone(),
+            ));
         }
         let seq_ads = Self {
             write_buf_size,
@@ -162,10 +175,13 @@ impl SeqAds {
         for loader in &self.entry_loaders {
             loader.lock().unwrap().run_task(change_sets);
         }
-        for updater in & self.entry_updaters {
+        for updater in &self.entry_updaters {
             updater.lock().unwrap().run_task(change_sets);
         }
-        self.code_updater.lock().unwrap().run_task(task_id, change_sets);
+        self.code_updater
+            .lock()
+            .unwrap()
+            .run_task(task_id, change_sets);
         self.entry_flusher.lock().unwrap().flush_tx(SHARD_COUNT + 1);
     }
 
@@ -215,7 +231,8 @@ impl<T: Task + 'static> ADS for SeqAdsWrap<T> {
             panic!("buf.len() less than DEFAULT_ENTRY_SIZE");
         }
         let mut size = 0;
-        self.ads.code_indexer
+        self.ads
+            .code_indexer
             .for_each_value(code_hash, |file_pos| -> bool {
                 size = self.ads.code_file.read_entry(file_pos, &mut buf[..]);
                 if buf.len() < size {
@@ -235,42 +252,5 @@ impl<T: Task + 'static> ADS for SeqAdsWrap<T> {
     fn add_task(&self, task_id: i64) {
         let change_sets = self.tasks_manager.get_tasks_change_sets(task_id as usize);
         self.ads.commit_tx(task_id, &change_sets);
-    }
-
-    fn get_proof(&self, key_hash_list: Vec<[u8; 32]>) -> Vec<Vec<u8>> {
-        let mut proofs = vec![];
-        for shard_id in 0..SHARD_COUNT {
-            let arr = key_hash_list
-                .iter()
-                .filter(|key_hash| key_hash[0] as usize >> 4 == shard_id)
-                .map(|key_hash| key_hash.clone())
-                .collect::<Vec<[u8; 32]>>();
-            let mut bufs = (0..SHARD_COUNT)
-                .map((|_| vec![0; DEFAULT_ENTRY_SIZE]))
-                .collect::<Vec<Vec<u8>>>();
-            for (idx, key_hash) in arr.iter().enumerate() {
-                let (size, found_it) = self.read_entry(key_hash, &[], bufs.get_mut(idx).unwrap());
-                if found_it {
-                    bufs[0].truncate(size);
-                } else {
-                    bufs[0].truncate(0);
-                }
-            }
-
-            let mut sns = vec![];
-            let mut entries = vec![];
-            for buf in &bufs {
-                let entry_bz = EntryBz { bz: buf };
-                sns.push(entry_bz.serial_number());
-                entries.push(entry_bz);
-            }
-
-            let entry_flusher = &self.ads.entry_flusher.lock().unwrap();
-            let shard = &*entry_flusher.shards[shard_id];
-            let witness = get_witness(&sns, &shard.tree);
-            proofs.push(encode_witness(&witness, &entries));
-        }
-
-        vec![]
     }
 }

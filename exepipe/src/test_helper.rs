@@ -148,10 +148,6 @@ impl ADS for MockADS {
     fn add_task(&self, _task_id: i64) {
         // self.task_list.push(task_id);
     }
-
-    fn get_proof(&self, key_hash_list: Vec<[u8; 32]>) -> Vec<Vec<u8>> {
-        vec![]
-    }
 }
 
 pub fn encode_account_info(account_info: &AccountInfo) -> Vec<u8> {

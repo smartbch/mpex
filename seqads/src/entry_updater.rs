@@ -1,44 +1,45 @@
-use std::collections::HashMap;
-use std::rc::Rc;
-use std::sync::Arc;
 use byteorder::{BigEndian, ByteOrder};
 use mpads::changeset::ChangeSet;
-use mpads::def::{DEFAULT_ENTRY_SIZE, OP_WRITE, OP_CREATE, OP_DELETE, CODE_SHARD_ID};
+use mpads::def::{CODE_SHARD_ID, DEFAULT_ENTRY_SIZE, OP_CREATE, OP_DELETE, OP_WRITE};
 use mpads::entry::{Entry, EntryBz};
 use mpads::entrycache::EntryCache;
 use mpads::entryfile::EntryFile;
 use mpads::indexer::{BTreeIndexer, CodeIndexer};
 use mpads::refdb::OpRecord;
-use mpads::utils::{hasher};
+use mpads::utils::hasher;
+use std::collections::HashMap;
+use std::rc::Rc;
+use std::sync::Arc;
 
 pub struct UpdateBuffer {
-    pub entry_map :HashMap<i64, Vec<u8>>,
+    pub entry_map: HashMap<i64, Vec<u8>>,
     pub start: i64,
-    pub end : i64
+    pub end: i64,
 }
 
 impl UpdateBuffer {
     pub fn new() -> Self {
-        return Self{
+        return Self {
             entry_map: Default::default(),
             start: -1,
             end: -1,
-        }
+        };
     }
     pub fn get_entry_bz_at<F>(&mut self, file_pos: i64, mut access: F) -> bool
     where
-        F: FnMut(EntryBz) {
+        F: FnMut(EntryBz),
+    {
         if file_pos < self.start {
-            return true // in disk
+            return true; // in disk
         }
         if file_pos > self.end {
             panic!("file_pose exceed self.end")
         }
-        let entry_bz = EntryBz{
+        let entry_bz = EntryBz {
             bz: self.entry_map.get(&file_pos).unwrap(),
         };
         access(entry_bz);
-        return false
+        return false;
     }
 
     pub fn append(&mut self, entry: &Entry, deactived_serial_num_list: &[u64]) -> i64 {
@@ -57,12 +58,10 @@ impl UpdateBuffer {
     pub fn get_all_entry_bz(&self) -> Vec<EntryBz> {
         let mut res = vec![];
         for value in self.entry_map.values() {
-            let entry_bz = EntryBz{
-                bz: value,
-            };
+            let entry_bz = EntryBz { bz: value };
             res.push(entry_bz);
         }
-        return res
+        return res;
     }
 }
 
@@ -72,13 +71,13 @@ pub struct CodeUpdater {
 }
 
 impl CodeUpdater {
-    pub fn new(indexer:Arc<CodeIndexer>) -> Self {
-        return Self{
-            update_buffer:UpdateBuffer::new(),
+    pub fn new(indexer: Arc<CodeIndexer>) -> Self {
+        return Self {
+            update_buffer: UpdateBuffer::new(),
             indexer,
-        }
+        };
     }
-    pub fn run_task(&mut self, task_id:i64, change_sets: &Vec<ChangeSet>) {
+    pub fn run_task(&mut self, task_id: i64, change_sets: &Vec<ChangeSet>) {
         for change_set in change_sets {
             change_set.run_in_shard(CODE_SHARD_ID, |op, _kh, k, v, _r| match op {
                 OP_CREATE => self.create_kv(task_id, k, v),
@@ -113,9 +112,9 @@ pub struct EntryUpdater {
     curr_version: i64,
 
     update_buffer: UpdateBuffer,
-    sn_end: u64,
+    pub sn_end: u64,
 
-    compact_start:i64,
+    compact_start: i64,
     compact_thres: usize,
 }
 
@@ -126,8 +125,8 @@ impl EntryUpdater {
         indexer: Arc<BTreeIndexer>,
         curr_version: i64,
         sn_end: u64,
-        compact_start:i64,
-        compact_thres:usize
+        compact_start: i64,
+        compact_thres: usize,
     ) -> Self {
         Self {
             shard_id,
@@ -138,19 +137,17 @@ impl EntryUpdater {
             curr_version,
             sn_end,
             compact_start,
-            update_buffer:UpdateBuffer::new(),
+            update_buffer: UpdateBuffer::new(),
             compact_thres,
         }
     }
     pub fn run_task(&mut self, change_sets: &Vec<ChangeSet>) {
         for change_set in change_sets {
-            change_set.run_in_shard(self.shard_id, |op, key_hash, k, v, r| {
-                match op {
-                    OP_WRITE => self.write_kv(&key_hash, k, v, r),
-                    OP_CREATE => self.create_kv(&key_hash, k, v, r),
-                    OP_DELETE => self.delete_kv(&key_hash, k, r),
-                    _ => {}
-                }
+            change_set.run_in_shard(self.shard_id, |op, key_hash, k, v, r| match op {
+                OP_WRITE => self.write_kv(&key_hash, k, v, r),
+                OP_CREATE => self.create_kv(&key_hash, k, v, r),
+                OP_DELETE => self.delete_kv(&key_hash, k, r),
+                _ => {}
             });
         }
     }
@@ -250,7 +247,8 @@ impl EntryUpdater {
         };
         let deactived_sn_list: [u64; 2] = [del_entry_sn, prev_entry.serial_number()];
         let new_pos = self
-            .update_buffer.append(&prev_changed, &deactived_sn_list[..]);
+            .update_buffer
+            .append(&prev_changed, &deactived_sn_list[..]);
 
         self.sn_end += 1;
         self.indexer.change_kv(prev_k64, old_pos, new_pos);
@@ -307,18 +305,17 @@ impl EntryUpdater {
         };
         let deactivated_sn_list: [u64; 1] = [prev_entry.serial_number()];
         let new_pos = self
-            .update_buffer.append(&prev_changed, &deactivated_sn_list[..]);
+            .update_buffer
+            .append(&prev_changed, &deactivated_sn_list[..]);
         self.indexer.add_kv(k64, create_pos);
         self.indexer.change_kv(prev_k64, old_pos, new_pos);
         self.try_compact();
         self.try_compact();
     }
 
-    fn try_compact(
-        &mut self,
-    ) {
+    fn try_compact(&mut self) {
         if self.indexer.len(self.shard_id) < self.compact_thres {
-            return
+            return;
         }
         let mut bz: Vec<u8> = vec![0; DEFAULT_ENTRY_SIZE];
         let size = self.entry_file.read_entry(self.compact_start, &mut bz[..]);
@@ -337,7 +334,8 @@ impl EntryUpdater {
             serial_number: self.sn_end,
         };
         self.sn_end += 1;
-        self.update_buffer.append(&new_entry, &vec![old_entry.serial_number()]);
+        self.update_buffer
+            .append(&new_entry, &vec![old_entry.serial_number()]);
     }
 
     pub fn get_all_entry_bz(&self) -> Vec<EntryBz> {
