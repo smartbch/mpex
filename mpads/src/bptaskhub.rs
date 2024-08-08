@@ -31,8 +31,8 @@ impl<T: Task> BlockPairTaskHub<T> {
             tasks_in_blk1: AtomPtr::new(Arc::new(TasksManager::<T>::default())),
             height0: AtomicI64::new(-1),
             height1: AtomicI64::new(-1),
-            cache0: AtomPtr::new(Arc::new(EntryCache::new_uint())),
-            cache1: AtomPtr::new(Arc::new(EntryCache::new_uint())),
+            cache0: AtomPtr::new(Arc::new(EntryCache::new_uninit())),
+            cache1: AtomPtr::new(Arc::new(EntryCache::new_uninit())),
         }
     }
 
@@ -156,7 +156,7 @@ mod tests {
     fn test_start_end_block() {
         let hub: BlockPairTaskHub<SimpleTask> = BlockPairTaskHub::new();
         let tasks_in_blk = Arc::new(TasksManager::default());
-        let cache = Arc::new(EntryCache::new_uint());
+        let cache = Arc::new(EntryCache::new_uninit());
 
         hub.start_block(1, tasks_in_blk.clone(), cache.clone());
         assert_eq!(hub.free_slot_count(), 1);
@@ -183,7 +183,7 @@ mod tests {
         let tasks_in_blk = vec![RwLock::new(Some(SimpleTask::new(vec![changeset])))];
         let last_task_id_in_blk = 1 << IN_BLOCK_IDX_BITS;
         let tasks_manager = Arc::new(TasksManager::new(tasks_in_blk, last_task_id_in_blk));
-        let cache = Arc::new(EntryCache::new_uint());
+        let cache = Arc::new(EntryCache::new_uninit());
 
         hub.start_block(1, tasks_manager, cache.clone());
 
@@ -209,7 +209,7 @@ mod tests {
         let changeset = ChangeSet::new();
         let tasks_in_blk = vec![RwLock::new(Some(SimpleTask::new(vec![changeset])))];
         let tasks_manager = Arc::new(TasksManager::new(tasks_in_blk, 0));
-        let cache = Arc::new(EntryCache::new_uint());
+        let cache = Arc::new(EntryCache::new_uninit());
 
         hub.start_block(1, tasks_manager, cache.clone());
 

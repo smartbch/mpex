@@ -34,7 +34,7 @@ impl<T: Task + 'static> SeqAdsWrap<T> {
         Self {
             tasks_manager:Arc::new(TasksManager::default()),
             ads: Arc::new(ads),
-            cache: Arc::new(EntryCache::new_uint()),
+            cache: Arc::new(EntryCache::new_uninit()),
         }
     }
 

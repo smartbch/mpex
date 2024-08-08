@@ -15,7 +15,7 @@ impl EntryCache {
         EntryCache { bc }
     }
 
-    pub fn new_uint() -> Self {
+    pub fn new_uninit() -> Self {
         EntryCache {
             bc: Vec::with_capacity(0),
         }

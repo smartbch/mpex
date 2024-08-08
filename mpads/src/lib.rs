@@ -360,7 +360,7 @@ impl AdsCore {
                 shard_id,
                 u_eb_wr.entry_buffer.clone(),
                 entry_file.clone(),
-                Arc::new(EntryCache::new_uint()),
+                Arc::new(EntryCache::new_uninit()),
                 self.indexer.clone(),
                 mid_sender.clone(),
                 tpool.clone(),
@@ -434,7 +434,7 @@ impl<T: Task + 'static> AdsWrap<T> {
         Self {
             task_hub,
             ads: Arc::new(ads),
-            cache: Arc::new(EntryCache::new_uint()),
+            cache: Arc::new(EntryCache::new_uninit()),
             end_block_chan,
         }
     }
