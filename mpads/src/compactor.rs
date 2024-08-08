@@ -52,7 +52,7 @@ impl Compactor {
             if file_size <= file_pos + 5
             /*entry length size*/
             {
-                println!("no entry here!");
+                //println!("no entry here!");
                 thread::sleep(time::Duration::from_millis(500));
                 continue;
             }

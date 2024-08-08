@@ -19,8 +19,6 @@ use std::time::{Duration, Instant};
 
 const ROUND_COUNT: usize = 2;
 
-// cargo run --release --bin v2_speed -- 24 ;# 18 23 27 28
-
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let mut total_bits: usize = 20;
@@ -50,10 +48,14 @@ fn main() {
     let total_blocks = blk_in_round * ROUND_COUNT;
     println!("AA block_in_round={} total_blocks={}", blk_in_round, total_blocks);
     let mut now = Instant::now();
+    let mut start = Instant::now();
     for height in 1..(1+total_blocks as i64){
         println!("END height={}", height);
         let task_list = test_gen.gen_block();
         let task_count = task_list.len() as i64;
+        if height as usize == blk_in_round {
+            start = Instant::now();
+        }
         if height as usize > blk_in_round && height % 10 == 5 {
             let elapsed = now.elapsed();
             println!("Elapse height={} task_count={:#08x} elapsed={:.2?}", height, task_count, elapsed);
@@ -68,6 +70,8 @@ fn main() {
             shared_ads.add_task(task_id);
         }
     }
+    let elapsed = start.elapsed();
+    println!("Since beginning of round#1 elapsed={:.2?}", elapsed);
 
     // check
     
@@ -138,7 +142,7 @@ impl TestGenV2 {
     pub fn new(randsrc: RandSrc, total_bits: usize) -> Self {
         Self {
             op_in_cset: 8,
-            cset_in_task: 8,
+            cset_in_task: 2,
             task_in_block: 8 * 1024,
             cur_num: 0,
             cur_round: 0,

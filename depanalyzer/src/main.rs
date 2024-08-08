@@ -43,9 +43,9 @@ fn main() {
 
     //run_aggregate_tx();
  
-    //allocate_twigs(1024*1024);
-    //allocate_twig_boxes(1024*1024);
-    //allocate_indexer_entries(1<<26);
+    //allocate_twigs(2*(1<<27)/2048);
+    //allocate_twig_boxes(2*(1<<27)/2048);
+    //allocate_indexer_entries(1<<27);
 }
 
 
@@ -622,6 +622,9 @@ fn allocate_indexer_entries(count: u64) {
     let mut buf = [0u8; 8];
     let mut indexer = BTreeIndexer::new(65536);
     for i in 0..count {
+        if i % (count/256) == 0 {
+            println!("{}", i / (count/256));
+        }
         BigEndian::write_u64(&mut buf[..], i);
         let hash = hasher::hash(&buf[..]);
         let k = BigEndian::read_u64(&hash[..8]);
