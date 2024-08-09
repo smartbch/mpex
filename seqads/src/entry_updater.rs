@@ -44,7 +44,7 @@ impl UpdateBuffer {
 
     pub fn append(&mut self, entry: &Entry, deactived_serial_num_list: &[u64]) -> i64 {
         let size = entry.get_serialized_len(deactived_serial_num_list.len());
-        let mut e = Vec::with_capacity(size);
+        let mut e = vec![0;size];
         entry.dump(&mut e, deactived_serial_num_list);
         if self.end == -1 {
             self.end = self.start;
@@ -121,6 +121,7 @@ pub struct EntryUpdater {
 impl EntryUpdater {
     pub fn new(
         shard_id: usize,
+        cache: Arc<EntryCache>,
         entry_file: Arc<EntryFile>,
         indexer: Arc<BTreeIndexer>,
         curr_version: i64,
@@ -130,7 +131,7 @@ impl EntryUpdater {
     ) -> Self {
         Self {
             shard_id,
-            cache: Arc::new(EntryCache::new_uninit()),
+            cache,
             entry_file,
             indexer,
             read_entry_buf: Vec::with_capacity(DEFAULT_ENTRY_SIZE),

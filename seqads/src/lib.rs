@@ -60,7 +60,7 @@ impl<T: Task + 'static> SeqAdsWrap<T> {
 pub struct SeqAds {
     write_buf_size: usize,
     entry_files: Vec<Arc<EntryFile>>,
-    indexer: Arc<BTreeIndexer>,
+    pub indexer: Arc<BTreeIndexer>,
     code_file: Arc<EntryFile>,
     code_indexer: Arc<CodeIndexer>,
     meta_db: Arc<RwLock<MetaDB>>,
@@ -101,6 +101,7 @@ impl SeqAds {
         let mut shards: Vec<Box<FlusherShard>> = Vec::with_capacity(SHARD_COUNT);
         let mut entry_updaters = Vec::<Arc<Mutex<EntryUpdater>>>::with_capacity(SHARD_COUNT);
         let meta = Arc::new(RwLock::new(meta));
+        let entry_cache = Arc::new(EntryCache::new());
         for shard_id in 0..SHARD_COUNT {
             let (tree, oldest_active_twig_id, oldest_active_sn) = AdsCore::_recover_tree(
                 meta.clone(),
@@ -124,6 +125,7 @@ impl SeqAds {
             let oldest_active_sn = meta.clone().read().unwrap().get_oldest_active_sn(shard_id);
             let updater = Arc::new(Mutex::new(EntryUpdater::new(
                 shard_id,
+                entry_cache.clone(),
                 entry_file.clone(),
                 indexer.clone(),
                 -1,
@@ -145,7 +147,6 @@ impl SeqAds {
             code_shard,
             meta.clone(),
         )));
-        let entry_cache = Arc::new(EntryCache::new());
         let mut entry_loaders = Vec::<Mutex<EntryLoader>>::with_capacity(SHARD_COUNT);
         for i in 0..SHARD_COUNT {
             entry_loaders.push(Mutex::new(EntryLoader::new(
@@ -182,7 +183,7 @@ impl SeqAds {
             .lock()
             .unwrap()
             .run_task(task_id, change_sets);
-        self.entry_flusher.lock().unwrap().flush_tx(SHARD_COUNT + 1);
+        self.entry_flusher.lock().unwrap().flush_tx(SHARD_COUNT);
     }
 
     pub fn commit_block(&self, height: i64) {
