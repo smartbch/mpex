@@ -9,7 +9,7 @@ use crate::entry_updater::{CodeUpdater, EntryUpdater};
 use byteorder::{BigEndian, ByteOrder};
 use mpads::bptaskhub::Task;
 use mpads::changeset::ChangeSet;
-use mpads::def::{CODE_PATH, DEFAULT_ENTRY_SIZE, SHARD_COUNT};
+use mpads::def::{CODE_PATH, CODE_SHARD_ID, DEFAULT_ENTRY_SIZE, SHARD_COUNT};
 use mpads::entry::EntryBz;
 use mpads::entrycache::EntryCache;
 use mpads::entryfile::EntryFile;
@@ -83,24 +83,23 @@ impl SeqAds {
         ));
         let code_indexer = Arc::new(CodeIndexer::new());
         AdsCore::index_code(&code_file, &code_indexer);
-        let code_updater = Arc::new(Mutex::new(CodeUpdater::new(code_indexer.clone())));
 
+        let meta_dir = dir.to_owned() + "/metadb";
+        let meta = MetaDB::new_with_dir(&meta_dir);
+        let curr_height = meta.get_curr_height();
+        let code_file_size = meta.get_code_file_size();
+        let code_updater = Arc::new(Mutex::new(CodeUpdater::new(code_indexer.clone(), code_file_size)));
         let code_shard = Some(Box::new(CodeFlusherShard::new(
             code_file.clone(),
             write_buf_size,
             code_updater.clone(),
         )));
-
         let indexer = Arc::new(BTreeIndexer::new(1 << 16));
-
-        let meta_dir = dir.to_owned() + "/metadb";
-        let meta = MetaDB::new_with_dir(&meta_dir);
-        let curr_height = meta.get_curr_height();
+        let meta = Arc::new(RwLock::new(meta));
 
         let mut entry_files = Vec::with_capacity(SHARD_COUNT);
         let mut shards: Vec<Box<FlusherShard>> = Vec::with_capacity(SHARD_COUNT);
         let mut entry_updaters = Vec::<Arc<Mutex<EntryUpdater>>>::with_capacity(SHARD_COUNT);
-        let meta = Arc::new(RwLock::new(meta));
         let entry_cache = Arc::new(EntryCache::new());
         for shard_id in 0..SHARD_COUNT {
             let (tree, oldest_active_twig_id, oldest_active_sn) = AdsCore::_recover_tree(
@@ -123,8 +122,10 @@ impl SeqAds {
                 .unwrap()
                 .get_oldest_active_file_pos(shard_id);
             let oldest_active_sn = meta.clone().read().unwrap().get_oldest_active_sn(shard_id);
+            let entry_file_size = meta.clone().read().unwrap().get_entry_file_size(shard_id);
             let updater = Arc::new(Mutex::new(EntryUpdater::new(
                 shard_id,
+                entry_file_size,
                 entry_cache.clone(),
                 entry_file.clone(),
                 indexer.clone(),

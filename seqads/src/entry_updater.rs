@@ -18,11 +18,11 @@ pub struct UpdateBuffer {
 }
 
 impl UpdateBuffer {
-    pub fn new() -> Self {
+    pub fn new(start :i64) -> Self {
         return Self {
             entry_map: Default::default(),
-            start: -1,
-            end: -1,
+            start,
+            end: start,
         };
     }
     pub fn get_entry_bz_at<F>(&mut self, file_pos: i64, mut access: F) -> bool
@@ -46,8 +46,9 @@ impl UpdateBuffer {
         let size = entry.get_serialized_len(deactived_serial_num_list.len());
         let mut e = vec![0;size];
         entry.dump(&mut e, deactived_serial_num_list);
-        if self.end == -1 {
+        if self.end == self.start {
             self.end = self.start;
+            self.start = -1;
         } else {
             self.end = self.end + size as i64;
         }
@@ -71,9 +72,9 @@ pub struct CodeUpdater {
 }
 
 impl CodeUpdater {
-    pub fn new(indexer: Arc<CodeIndexer>) -> Self {
+    pub fn new(indexer: Arc<CodeIndexer>, start_pos :i64) -> Self {
         return Self {
-            update_buffer: UpdateBuffer::new(),
+            update_buffer: UpdateBuffer::new(start_pos),
             indexer,
         };
     }
@@ -121,6 +122,7 @@ pub struct EntryUpdater {
 impl EntryUpdater {
     pub fn new(
         shard_id: usize,
+        start_pos :i64,
         cache: Arc<EntryCache>,
         entry_file: Arc<EntryFile>,
         indexer: Arc<BTreeIndexer>,
@@ -138,7 +140,7 @@ impl EntryUpdater {
             curr_version,
             sn_end,
             compact_start,
-            update_buffer: UpdateBuffer::new(),
+            update_buffer: UpdateBuffer::new(start_pos),
             compact_thres,
         }
     }
