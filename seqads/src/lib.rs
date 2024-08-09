@@ -148,12 +148,12 @@ impl SeqAds {
         let entry_cache = Arc::new(EntryCache::new());
         let mut entry_loaders = Vec::<Mutex<EntryLoader>>::with_capacity(SHARD_COUNT);
         for i in 0..SHARD_COUNT {
-            entry_loaders[i] = Mutex::new(EntryLoader::new(
+            entry_loaders.push(Mutex::new(EntryLoader::new(
                 i,
                 entry_files[i].clone(),
                 entry_cache.clone(),
                 indexer.clone(),
-            ));
+            )));
         }
         let seq_ads = Self {
             write_buf_size,
