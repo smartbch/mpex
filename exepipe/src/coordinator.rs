@@ -1,7 +1,7 @@
 use crate::context;
 use crate::scheduler::{EarlyExeInfo, EARLY_EXE_WINDOW_SIZE};
 use mpads::def::{IN_BLOCK_IDX_BITS, IN_BLOCK_IDX_MASK};
-use mpads::{ADS, SharedAdsWrap};
+use mpads::{SharedAdsWrap, ADS};
 use std::collections::{HashMap, HashSet};
 use std::sync::mpsc;
 use std::sync::Arc;
@@ -24,7 +24,7 @@ pub struct Coordinator<T: ADS> {
     blk_ctx: Arc<context::BlockContext<T>>,
 }
 
-impl <T:ADS> Coordinator<T> {
+impl<T: ADS> Coordinator<T> {
     pub fn new(
         tpool: Arc<ThreadPool>,
         blk_ctx: Arc<context::BlockContext<T>>,
@@ -134,7 +134,7 @@ impl <T:ADS> Coordinator<T> {
 mod tests {
     use std::sync::{Arc, RwLock};
 
-    use mpads::{SharedAdsWrap, tasksmanager::TasksManager, test_helper::TempDir};
+    use mpads::{tasksmanager::TasksManager, test_helper::TempDir, SharedAdsWrap};
     use revm::primitives::{BlockEnv, TxEnv};
     use serial_test::serial;
 

@@ -1,7 +1,8 @@
-use byteorder::{ByteOrder, BigEndian, LittleEndian};
+use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use mpads::changeset::ChangeSet;
 use mpads::def::{
-    CODE_SHARD_ID, COMPACT_THRES, DEFAULT_ENTRY_SIZE, IN_BLOCK_IDX_BITS, OP_CREATE, OP_DELETE, OP_WRITE, SENTRY_COUNT, SHARD_COUNT, UTILIZATION_DIV, UTILIZATION_RATIO
+    CODE_SHARD_ID, COMPACT_THRES, DEFAULT_ENTRY_SIZE, IN_BLOCK_IDX_BITS, OP_CREATE, OP_DELETE,
+    OP_WRITE, SENTRY_COUNT, SHARD_COUNT, UTILIZATION_DIV, UTILIZATION_RATIO,
 };
 use mpads::entry::EntryBz;
 use mpads::refdb::{byte0_to_shard_id, OpRecord, RefDB};
@@ -10,12 +11,12 @@ use mpads::test_helper::{SimpleTask, TempDir};
 use mpads::utils::hasher;
 use mpads::{AdsCore, AdsWrap, ADS};
 use randsrc::RandSrc;
-use std::{fs, thread};
-use std::path::Path;
 use std::collections::HashSet;
+use std::path::Path;
 use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
+use std::{fs, thread};
 
 const BLOCK_COUNT: usize = 400;
 
@@ -54,7 +55,12 @@ fn main() {
                 panic!("Cannot read entry");
             }
             if buf[..size] != v[..] {
-                panic!("Value mismatch k={:?} ref_v={:?} imp_v={:?}", k, v, &buf[..size]);
+                panic!(
+                    "Value mismatch k={:?} ref_v={:?} imp_v={:?}",
+                    k,
+                    v,
+                    &buf[..size]
+                );
             }
         }
     }
@@ -114,7 +120,7 @@ impl TestGenV1 {
             active_num_to_start_remove: total_sentry + (3 << 14),
             active_num_to_start_read: total_sentry + (3 << 14),
             remove_prob: 20, // 20%
-            code_prob: 5, //5%
+            code_prob: 5,    //5%
             max_code_len: 1024,
             max_cset_in_task: 5,
             max_read_count: 20,
@@ -148,7 +154,11 @@ impl TestGenV1 {
 
     pub fn gen_cset(&mut self) -> ChangeSet {
         let mut pre_cset = ChangeSet::new();
-        let cset_size = rand_between(&mut self.randsrc, self.change_set_size_min, self.change_set_size_max);
+        let cset_size = rand_between(
+            &mut self.randsrc,
+            self.change_set_size_min,
+            self.change_set_size_max,
+        );
         let mut keys = HashSet::new();
         for _ in 0..cset_size {
             self.gen_op(&mut pre_cset, &mut keys);
@@ -185,7 +195,14 @@ impl TestGenV1 {
             let code_len = rand_between(&mut self.randsrc, 10, self.max_code_len);
             let bytecode = self.randsrc.get_bytes(code_len);
             let kh = hasher::hash(&code_hash[..]);
-            cset.add_op(OP_CREATE, CODE_SHARD_ID as u8, &kh, &code_hash[..], &bytecode[..], None);
+            cset.add_op(
+                OP_CREATE,
+                CODE_SHARD_ID as u8,
+                &kh,
+                &code_hash[..],
+                &bytecode[..],
+                None,
+            );
             return;
         }
         let active_num = self.refdb.total_num_active();
@@ -215,7 +232,7 @@ impl TestGenV1 {
         rand_between(&mut self.randsrc, 0, self.max_read_count)
     }
 
-    //fn read_entry(&self, key_hash: &[u8], key: &[u8], buf: &mut [u8]) -> (usize, bool) 
+    //fn read_entry(&self, key_hash: &[u8], key: &[u8], buf: &mut [u8]) -> (usize, bool)
     pub fn rand_read_kv(&mut self, curr_height: i64) -> ([u8; 32], [u8; 32], Vec<u8>) {
         loop {
             let mut k_num = rand_between(&mut self.randsrc, 0, self.key_count_max);
@@ -228,7 +245,7 @@ impl TestGenV1 {
             }
             //println!("AA try rand_read hit k_num={}", k_num);
             let v = v_opt.unwrap();
-            let e = EntryBz{ bz: &v[..] };
+            let e = EntryBz { bz: &v[..] };
             let create_height = e.version() >> IN_BLOCK_IDX_BITS;
             if create_height + 2 > curr_height {
                 continue; //retry to avoid recent
@@ -237,4 +254,3 @@ impl TestGenV1 {
         }
     }
 }
-

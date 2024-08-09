@@ -1,21 +1,21 @@
 use byteorder::{BigEndian, ByteOrder};
 use exepipe::exetask::AccessSet;
 use exepipe::scheduler::{PBElement, ParaBloom, MAX_TASKS_LEN_IN_BUNDLE, SET_MAX_SIZE};
-use mpads::utils::hasher;
-use mpads::twig::Twig;
 use mpads::indexer::BTreeIndexer;
+use mpads::twig::Twig;
+use mpads::utils::hasher;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::io::{self, BufRead};
-use std::path::Path;
 use std::mem;
+use std::path::Path;
+use std::time::Instant;
 use std::{
     fs::{File, OpenOptions},
     io::{Read, Write},
 };
-use std::time::Instant;
 
 const MIN_BUNDLE_SIZE: usize = 8;
 
@@ -42,12 +42,11 @@ fn main() {
     }
 
     //run_aggregate_tx();
- 
+
     //allocate_twigs(2*(1<<27)/2048);
     //allocate_twig_boxes(2*(1<<27)/2048);
     //allocate_indexer_entries(1<<27);
 }
-
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Slot {
@@ -140,10 +139,7 @@ pub fn run_aggregate_tx() {
     for id in (START_HEIGHT..END_HEIGHT).step_by(10) {
         let mut file = OpenOptions::new()
             .read(true)
-            .open(format!(
-                "blocks/blocks_{}.json",
-                id
-            ))
+            .open(format!("blocks/blocks_{}.json", id))
             .expect("Could not read file");
         let mut contents = String::new();
         file.read_to_string(&mut contents).unwrap();
@@ -156,7 +152,10 @@ pub fn run_aggregate_tx() {
             total_task += task_list.len();
         }
     }
-    println!("MergeResult total_tx={} total_task={}", total_tx, total_task);
+    println!(
+        "MergeResult total_tx={} total_task={}",
+        total_tx, total_task
+    );
 }
 
 #[derive(Deserialize, Debug)]
@@ -378,7 +377,12 @@ impl Scheduler {
         target.truncate(0);
     }
 
-    fn add_access_set(&mut self, txid: String, access_set: Box<AccessSet>, total_bundle: &mut usize) {
+    fn add_access_set(
+        &mut self,
+        txid: String,
+        access_set: Box<AccessSet>,
+        total_bundle: &mut usize,
+    ) {
         let mask = self.pb.get_dep_mask(&access_set);
         //println!("depmask={:#016x}", mask);
         let mut bundle_id = mask.trailing_ones() as usize;
@@ -390,7 +394,7 @@ impl Scheduler {
             if cfg!(feature = "giveup_too_many_dep") {
                 if size < MIN_BUNDLE_SIZE {
                     println!("Giveup {}", txid);
-                    return
+                    return;
                 }
             }
             self.pb.clear(bundle_id);
@@ -474,10 +478,7 @@ pub fn run_serial_issuer() -> (usize, usize) {
     for id in (START_HEIGHT..END_HEIGHT).step_by(10) {
         let mut file = OpenOptions::new()
             .read(true)
-            .open(format!(
-                "blocks/blocks_{}.json",
-                id
-            ))
+            .open(format!("blocks/blocks_{}.json", id))
             .expect("Could not read file");
         let mut contents = String::new();
         file.read_to_string(&mut contents).unwrap();
@@ -496,8 +497,12 @@ pub fn run_serial_issuer() -> (usize, usize) {
     if serial_issuer.bundle_size != 0 {
         total_bundle += 1;
     }
-    println!("total_tx={} total_bundle={} TLP={}", total_tx, total_bundle,
-        (total_tx as f64)/(total_bundle as f64));
+    println!(
+        "total_tx={} total_bundle={} TLP={}",
+        total_tx,
+        total_bundle,
+        (total_tx as f64) / (total_bundle as f64)
+    );
 
     (total_tx, total_bundle)
 }
@@ -509,10 +514,7 @@ pub fn run_scheduler() -> (usize, usize) {
     for id in (START_HEIGHT..END_HEIGHT).step_by(10) {
         let mut file = OpenOptions::new()
             .read(true)
-            .open(format!(
-                "blocks/blocks_{}.json",
-                id
-            ))
+            .open(format!("blocks/blocks_{}.json", id))
             .expect("Could not read file");
         let mut contents = String::new();
         file.read_to_string(&mut contents).unwrap();
@@ -557,21 +559,22 @@ pub fn run_scheduler() -> (usize, usize) {
         }
     }
     scheduler.flush_all(&mut total_bundle);
-    println!("AA total_tx={} total_bundle={} TLP={}", total_tx, total_bundle,
-        (total_tx as f64)/(total_bundle as f64));
+    println!(
+        "AA total_tx={} total_bundle={} TLP={}",
+        total_tx,
+        total_bundle,
+        (total_tx as f64) / (total_bundle as f64)
+    );
     (total_tx, total_bundle)
 }
 
 pub fn test_scheduler_speed() {
     let mut scheduler = Scheduler::new();
     let mut all_access_sets: VecDeque<(String, Box<AccessSet>)> = VecDeque::new();
-    for id in (START_HEIGHT..START_HEIGHT+3000).step_by(10) {
+    for id in (START_HEIGHT..START_HEIGHT + 3000).step_by(10) {
         let mut file = OpenOptions::new()
             .read(true)
-            .open(format!(
-                "blocks/blocks_{}.json",
-                id
-            ))
+            .open(format!("blocks/blocks_{}.json", id))
             .expect("Could not read file");
         let mut contents = String::new();
         file.read_to_string(&mut contents).unwrap();
@@ -601,7 +604,10 @@ pub fn test_scheduler_speed() {
 
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?}", elapsed);
-    println!("Speed: {:.2?}", (size as f64)*1e9/(elapsed.as_nanos() as f64));
+    println!(
+        "Speed: {:.2?}",
+        (size as f64) * 1e9 / (elapsed.as_nanos() as f64)
+    );
 }
 
 fn allocate_twigs(count: u64) {
@@ -622,12 +628,12 @@ fn allocate_indexer_entries(count: u64) {
     let mut buf = [0u8; 8];
     let mut indexer = BTreeIndexer::new(65536);
     for i in 0..count {
-        if i % (count/256) == 0 {
-            println!("{}", i / (count/256));
+        if i % (count / 256) == 0 {
+            println!("{}", i / (count / 256));
         }
         BigEndian::write_u64(&mut buf[..], i);
         let hash = hasher::hash(&buf[..]);
         let k = BigEndian::read_u64(&hash[..8]);
-        indexer.add_kv(k, (i*8) as i64);
+        indexer.add_kv(k, (i * 8) as i64);
     }
 }

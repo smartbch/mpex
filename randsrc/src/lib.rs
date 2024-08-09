@@ -1,9 +1,9 @@
 extern crate core;
 
-use std::fs::{File};
-use std::io::{Read, Seek, SeekFrom};
 use blake2::{Blake2b512, Digest};
 use byteorder::{ByteOrder, LittleEndian};
+use std::fs::File;
+use std::io::{Read, Seek, SeekFrom};
 use std::str;
 pub struct RandSrc {
     file: File,
@@ -44,14 +44,13 @@ impl RandSrc {
         return res[..].to_owned();
     }
 
-
     fn step(&mut self) {
         let mut arr_a = [[0u8; 64]; 16];
         let mut arr_b = [[0u8; 64]; 16];
         for i in 0..16 {
             arr_a[i] = <[u8; 64]>::try_from(self.new512bits()).unwrap();
             arr_b[i] = <[u8; 64]>::try_from(self.new512bits()).unwrap();
-        };
+        }
         self.buf.clear();
         for i in 0..16 {
             for j in 0..16 {
@@ -88,14 +87,14 @@ impl RandSrc {
         return res;
     }
 
-    pub fn get_string(&mut self, n :usize) -> String {
+    pub fn get_string(&mut self, n: usize) -> String {
         let chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".as_bytes();
         let mut res = Vec::with_capacity(n);
         let bz = self.get_bytes(n);
         for b in bz.iter() {
             let j = *b as usize % chars.len();
             res.push(chars[j]);
-        };
+        }
         str::from_utf8(res.as_slice()).unwrap().into()
     }
 
@@ -151,15 +150,15 @@ impl RandSrc {
 
 #[cfg(test)]
 mod test_rand_src {
-    use std::fs::{File, remove_file};
-    use std::io::Write;
     use crate::RandSrc;
+    use std::fs::{remove_file, File};
+    use std::io::Write;
 
     #[test]
     fn test() {
         let file_name = "test_rand_src.txt";
         let mut f = File::create(file_name).unwrap();
-        let mut content = [2u8;128];
+        let mut content = [2u8; 128];
         for i in 0..128 {
             content[i] = i as u8;
         }
@@ -185,5 +184,4 @@ mod test_rand_src {
         println!("{}", data);
         remove_file(file_name).unwrap();
     }
-
 }

@@ -1,5 +1,4 @@
-use std::rc::Rc;
-use std::sync::Arc;
+use byteorder::{BigEndian, ByteOrder};
 use mpads::bytescache::new_cache_pos;
 use mpads::changeset::ChangeSet;
 use mpads::def;
@@ -7,11 +6,12 @@ use mpads::entry::EntryBz;
 use mpads::entrycache::EntryCache;
 use mpads::entryfile::EntryFile;
 use mpads::indexer::BTreeIndexer;
-use byteorder::{BigEndian, ByteOrder};
+use std::rc::Rc;
+use std::sync::Arc;
 use threadpool::ThreadPool;
 
 pub struct EntryLoader {
-    shard_id : usize,
+    shard_id: usize,
     entry_file: Arc<EntryFile>,
     cache: Arc<EntryCache>,
     indexer: Arc<BTreeIndexer>,
@@ -20,7 +20,7 @@ pub struct EntryLoader {
 
 impl EntryLoader {
     pub fn new(
-        shard_id : usize,
+        shard_id: usize,
         entry_file: Arc<EntryFile>,
         cache: Arc<EntryCache>,
         indexer: Arc<BTreeIndexer>,
@@ -82,7 +82,7 @@ impl EntryLoader {
                 indexer.for_each(op, k64, |_k, offset| -> bool {
                     let entry_file = self.entry_file.clone();
                     let cache = self.cache.clone();
-                    let shard_id  =  self.shard_id;
+                    let shard_id = self.shard_id;
                     self.thread_pool.execute(move || {
                         Self::fetch_entry_to_cache(entry_file, cache, shard_id, offset);
                     });
