@@ -57,6 +57,7 @@ pub struct EntryBuffer {
     start: AtomicI64,
     end: AtomicI64,
     buf_map: RwLock<HashMap<i64, Arc<BigBuf>>>,
+    free_list: RwLock<Vec<Arc<BigBuf>>>,
     pos_sender: SyncSender<i64>,
 }
 
@@ -67,6 +68,7 @@ pub fn new(start: i64, buf_margin: usize) -> (EntryBufferWriter, EntryBufferRead
         start: AtomicI64::new(start),
         end: AtomicI64::new(start),
         buf_map: RwLock::new(HashMap::<i64, Arc<BigBuf>>::new()),
+        free_list: RwLock::new(Vec::<Arc<BigBuf>>::new()),
         pos_sender,
     };
 
@@ -111,6 +113,22 @@ impl EntryBuffer {
         self.pos_sender.send(sn_end as i64).unwrap();
     }
 
+    fn allocate_big_buf(&self) -> Box<BigBuf> {
+        let mut free_list = self.free_list.write().unwrap();
+        let mut idx = usize::MAX;
+        for (i, arc) in free_list.iter().enumerate() {
+            if Arc::strong_count(arc) == 1 && Arc::weak_count(arc) == 0 {
+                idx = i;
+                break;
+            }
+        }
+        if idx != usize::MAX {
+            let arc = free_list.swap_remove(idx);
+            return Box::new(Arc::into_inner(arc).unwrap());
+        }
+        new_big_buf_boxed()
+    }
+
     fn append(
         &self,
         entry: &Entry,
@@ -119,7 +137,7 @@ impl EntryBuffer {
     ) -> (i64, Box<BigBuf>) {
         let size = entry.get_serialized_len(deactived_serial_num_list.len());
         if size > BIG_BUF_SIZE {
-            panic!("Entry too large");
+            panic!("Entry too large {} vs {}", size, BIG_BUF_SIZE);
         }
         let file_pos = self.end.load(Ordering::SeqCst);
         let idx = file_pos / BIG_BUF_SIZE_I64;
@@ -130,7 +148,7 @@ impl EntryBuffer {
             self.end.fetch_add(size as i64, Ordering::SeqCst);
             return (file_pos, curr_buf);
         }
-        let mut new_buf = new_big_buf_boxed();
+        let mut new_buf = self.allocate_big_buf();
         let total_length = entry.dump(&mut new_buf[..], deactived_serial_num_list);
         let copied_length = BIG_BUF_SIZE - offset as usize;
         curr_buf[offset as usize..].copy_from_slice(&new_buf[..copied_length]);
@@ -151,7 +169,10 @@ impl EntryBuffer {
             if old_start < new_start {
                 self.start.store(new_start, Ordering::SeqCst);
             }
-            buf_map.remove(&remove_idx);
+            if let Some(buf) = buf_map.remove(&remove_idx) {
+                let mut free_list = self.free_list.write().unwrap();
+                free_list.push(buf);
+            }
         }
         res
     }

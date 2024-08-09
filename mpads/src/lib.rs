@@ -413,6 +413,7 @@ pub struct AdsWrap<T: Task> {
     task_hub: Arc<BlockPairTaskHub<T>>,
     ads: Arc<AdsCore>,
     cache: Arc<EntryCache>,
+    cache_list: Vec<Arc<EntryCache>>,
     end_block_chan: Receiver<i64>, // when ads finish the prev block disk job, there will receive something.
 }
 
@@ -432,6 +433,7 @@ impl<T: Task + 'static> AdsWrap<T> {
             task_hub,
             ads: Arc::new(ads),
             cache: Arc::new(EntryCache::new_uninit()),
+            cache_list: Vec::new(),
             end_block_chan,
         }
     }
@@ -443,8 +445,27 @@ impl<T: Task + 'static> AdsWrap<T> {
         }
     }
 
+    fn allocate_cache(&mut self) -> Arc<EntryCache> {
+        let mut idx = usize::MAX;
+        for (i, arc) in self.cache_list.iter().enumerate() {
+            if Arc::strong_count(arc) == 1 && Arc::weak_count(arc) == 0 {
+                idx = i;
+                break;
+            }
+        }
+        println!("ALLC len={} idx={}", self.cache_list.len(), idx);
+        if idx != usize::MAX {
+            let cache = self.cache_list[idx].clone();
+            cache.clear();
+            return cache;
+        }
+        let cache = Arc::new(EntryCache::new());
+        self.cache_list.push(cache.clone());
+        cache
+    }
+
     pub fn start_block(&mut self, height: i64, tasks_manager: Arc<TasksManager<T>>) {
-        self.cache = Arc::new(EntryCache::new());
+        self.cache = self.allocate_cache();
 
         if self.task_hub.free_slot_count() == 0 {
             // adscore and task_hub are busy, wait for them to finish an old block

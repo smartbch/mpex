@@ -15,10 +15,24 @@ impl EntryCache {
         EntryCache { bc }
     }
 
+    pub fn clear(&self) {
+        for cache in self.bc.iter() {
+            cache.clear();
+        }
+    }
+
     pub fn new_uninit() -> Self {
         EntryCache {
             bc: Vec::with_capacity(0),
         }
+    }
+
+    pub fn size(&self) -> usize {
+        let mut total = 0usize;
+        for cache in self.bc.iter() {
+            total += cache.size();
+        }
+        total
     }
 
     fn pos2idx(file_pos: i64) -> usize {

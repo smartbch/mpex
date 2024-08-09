@@ -1,4 +1,4 @@
-pub const BYTES_CACHE_SHARD_COUNT: usize = 512;
+pub const BYTES_CACHE_SHARD_COUNT: usize = 32;
 pub const BIG_BUF_SIZE: usize = 64 * 1024; // 64KB
 
 pub const ENTRY_FIXED_LENGTH: usize = 1 + 3 + 1 + 32 + 8 + 8 + 8;

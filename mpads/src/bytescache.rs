@@ -21,6 +21,7 @@ pub fn split_cache_pos(idx_and_offset: u64) -> (usize, usize) {
 struct BytesCacheShard<KT: Hash + Eq + Clone> {
     pos_map: HashMap<KT, u64>,
     buf_list: Vec<Box<BigBuf>>,
+    free_list: Vec<Box<BigBuf>>,
     curr_buf_idx: u32,
     curr_offset: u32,
 }
@@ -30,9 +31,28 @@ impl<KT: Hash + Eq + Clone> BytesCacheShard<KT> {
         Self {
             pos_map: HashMap::new(),
             buf_list: Vec::new(),
+            free_list: Vec::new(),
             curr_buf_idx: 0,
             curr_offset: 0,
         }
+    }
+
+    pub fn clear(&mut self) {
+        self.pos_map.clear();
+        self.free_list.append(&mut self.buf_list);
+        self.curr_buf_idx = 0;
+        self.curr_offset = 0;
+    }
+
+    fn allocate_big_buf(&mut self) -> Box<BigBuf> {
+        if self.free_list.len() == 0 {
+            return new_big_buf_boxed();
+        }
+        self.free_list.pop().unwrap()
+    }
+
+    pub fn size(&self) -> usize {
+        return self.buf_list.len() * BIG_BUF_SIZE;
     }
 
     pub fn insert(&mut self, cache_key: &KT, cache_pos: u64) {
@@ -52,11 +72,11 @@ impl<KT: Hash + Eq + Clone> BytesCacheShard<KT> {
     pub fn fill(&mut self, bz: &[u8]) -> (u32, u32) {
         let size = bz.len();
         if self.buf_list.len() == 0 {
-            let new_buf = new_big_buf_boxed();
+            let new_buf = self.allocate_big_buf();
             self.buf_list.push(new_buf);
         }
         if self.curr_offset as usize + size > BIG_BUF_SIZE {
-            let new_buf = new_big_buf_boxed();
+            let new_buf = self.allocate_big_buf();
             self.buf_list.push(new_buf);
             self.curr_buf_idx = self.buf_list.len() as u32 - 1;
             self.curr_offset = 0;
@@ -97,6 +117,22 @@ impl<KT: Hash + Eq + Clone> BytesCache<KT> {
             shards.push(RwLock::new(BytesCacheShard::<KT>::new()));
         }
         Self { shards }
+    }
+
+    pub fn clear(&self) {
+        for idx in 0..BYTES_CACHE_SHARD_COUNT {
+            let mut shard = self.shards[idx].write().unwrap();
+            shard.clear();
+        }
+    }
+
+    pub fn size(&self) -> usize {
+        let mut total = 0usize;
+        for idx in 0..BYTES_CACHE_SHARD_COUNT {
+            let shard = self.shards[idx].read().unwrap();
+            total += shard.size()
+        }
+        total
     }
 
     pub fn insert(&self, cache_key: &KT, idx: usize, bz: &[u8]) {
