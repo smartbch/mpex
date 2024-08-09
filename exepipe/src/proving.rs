@@ -138,8 +138,9 @@ impl<'a> Validator<'a> {
             self.leaf_offsets,
             self.witness,
         );
+        let (rs, cs) = self.exec_tx();
+        self.fill_new_value(&cs); // TODO
         let ok = verify_witness(self.witness, self.old_root, self.new_root);
-        self.exec_tx();
     }
 
     fn exec_tx(&self) -> (Result<ResultAndState>, ChangeSet) {
@@ -181,6 +182,10 @@ impl<'a> Validator<'a> {
         }
 
         return (Ok(res_and_state), get_cs_result.unwrap());
+    }
+
+    fn fill_new_value(&self, cs: &ChangeSet) {
+        // TODO
     }
 
     // fn apply_change_set(witness: Witness, change_set: ChangeSet) {}

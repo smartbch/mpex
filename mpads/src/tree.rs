@@ -3,12 +3,11 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::{fmt, fs, mem, thread};
 
-use rand_core::le;
-
 use crate::def::{
     ENTRIES_PATH, FIRST_LEVEL_ABOVE_TWIG, LEAF_COUNT_IN_TWIG, MAX_TREE_LEVEL, MIN_PRUNE_COUNT,
     NODE_SHARD_COUNT, TWIG_MASK, TWIG_PATH, TWIG_ROOT_LEVEL, TWIG_SHARD_COUNT, TWIG_SHIFT,
 };
+use crate::entry::{Entry, EntryBz, Hash32};
 use crate::entryfile::{EntryFile, EntryFileWriter};
 use crate::twig::{ActiveBits, TwigMT, NULL_NODE_IN_HIGHER_TREE};
 use crate::twigfile::{TwigFile, TwigFileWriter};
@@ -1041,4 +1040,47 @@ pub fn get_shard_idx_and_key(twig_id: u64) -> (usize, u64) {
     let idx = twig_id as usize % TWIG_SHARD_COUNT;
     let key = twig_id / TWIG_SHARD_COUNT as u64;
     (idx, key)
+}
+
+// debug
+
+impl Tree {
+    pub fn print(&self) {
+        let mut offset: i64 = 0;
+        let mut buf = vec![0u8; 2048];
+        for twig_id in 0..self.youngest_twig_id {
+            for _sn in twig_id * 2048..(twig_id + 1) * 2048 {
+                let n = self.entry_file_wr.entry_file.read_entry(offset, &mut buf);
+                if n > buf.len() {
+                    buf.resize(n, 0);
+                    self.entry_file_wr.entry_file.read_entry(offset, &mut buf);
+                }
+                offset += n as i64;
+
+                let entry_bz = EntryBz { bz: &buf[0..n] };
+                let entry = Entry::from_bz(&entry_bz);
+
+                println!(
+                    "[entry] twig: {}, sn: {}, k: {}, v: {}",
+                    twig_id,
+                    entry.serial_number,
+                    hex::encode(entry.key),
+                    hex::encode(entry.value)
+                );
+            }
+        }
+
+        let mut cache: HashMap<i64, Hash32> = HashMap::new();
+        for twig_id in 0..self.youngest_twig_id {
+            for _sn in twig_id * 2048..(twig_id + 1) * 2048 {
+                let _h = self.get_hash_by_node(0, _sn, &mut cache);
+                println!(
+                    "[hash] level: {}, nth: {}, hash: {}",
+                    0,
+                    _sn,
+                    hex::encode(_h)
+                );
+            }
+        }
+    }
 }

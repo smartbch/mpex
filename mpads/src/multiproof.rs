@@ -447,6 +447,19 @@ fn get_null_hash_by_pos(level: u8, nth: u64) -> [u8; 32] {
     return NULL_MT_FOR_TWIG[stride / 2 + _nth];
 }
 
+// debug
+pub fn print_witness(witness: &Witness) {
+    for node in witness {
+        println!(
+            "L#{}, N#{}, OV: {}, NV: {}",
+            node.level,
+            node.nth,
+            hex::encode(node.old_value),
+            hex::encode(node.new_value)
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use core::hash;
@@ -461,7 +474,7 @@ mod tests {
         entryfile::EntryFileWithPreReader,
         multiproof::{
             decode_witness, encode_witness, get_changed_sn, get_witness, get_witness_offsets,
-            sn_to_leaf, verify_entries, verify_witness,
+            print_witness, sn_to_leaf, verify_entries, verify_witness,
         },
         test_helper::{build_test_tree, pad32, TempDir},
         tree::{NodePos, Tree},
@@ -475,9 +488,11 @@ mod tests {
         let dir_name = "./DataTree";
         let _tmp_dir = TempDir::new(dir_name);
         let (tree, _, _, _) = create_tree(dir_name, true);
+        // tree.print();
 
         let sns = vec![0, 9787];
         let witness = get_witness(&sns, &vec![], &tree);
+        // print_witness(&witness);
 
         let b = verify_witness(
             &witness,
